@@ -138,7 +138,7 @@ def create_dial_visualization(positions, rotations):
     anim = FuncAnimation(fig, update, frames=len(positions), 
                         interval=1000, repeat=True, blit=False)
     
-    plt.tight_layout()
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
     return fig, anim
 
 def create_static_visualization(positions, rotations):
