@@ -16,7 +16,7 @@ export default {
         <div style="margin-bottom: 1rem;">
           <a href="https://adventofcode.com/2025/day/1" target="_blank" style="color: #009900;">[View Puzzle]</a>
         </div>
-        <p>This puzzle involves simulating a <em>circular dial</em> with <em>10 positions</em> (0-9) and tracking when it passes through <em>position 0</em>.</p>
+        <p>You need to crack a safe to access the North Pole base. The safe has a <em>circular dial</em> with numbers <em>0-99</em>. Following a sequence of <em>left/right rotations</em>, the dial clicks as it passes each number. Starting at <em>50</em>, the password is the <em>number of times the dial points at 0</em> after any rotation in the sequence.</p>
         
         <h3 style="margin-top: 1rem;">Dial Visualization</h3>
         <img src="./assets/dial_animation.gif" alt="Animated Dial" style="max-width: 100%; border: 1px solid #00cc00;" />

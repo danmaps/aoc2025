@@ -56,6 +56,7 @@ export default {
         <div style="margin-bottom: 1rem;">
           <a href="https://adventofcode.com/2025/day/2" target="_blank" style="color: #009900;">[View Puzzle]</a>
         </div>
+        <p>After entering the base, you reach the gift shop where a snowman needs help identifying <em>invalid product IDs</em>. An ID is invalid in <em>Part 1</em> if it has an <em>even number of digits</em>, doesn't start with <em>0</em>, and the <em>left half exactly matches the right half</em>. In <em>Part 2</em>, an ID is invalid if it's formed by <em>repeating any pattern 2+ times</em> (like 1212 or 123123123).</p>
         <div class="tabs">
           <button class="tab active" data-part="part1">Part 1</button>
           <button class="tab" data-part="part2">Part 2</button>
