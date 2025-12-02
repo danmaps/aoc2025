@@ -16,7 +16,7 @@ export default {
         <div style="margin-bottom: 1rem;">
           <a href="https://adventofcode.com/2025/day/1" target="_blank" style="color: #009900;">[View Puzzle]</a>
         </div>
-        <p>This puzzle involves simulating a circular dial with 10 positions (0-9) and tracking when it passes through position 0.</p>
+        <p>This puzzle involves simulating a <em>circular dial</em> with <em>10 positions</em> (0-9) and tracking when it passes through <em>position 0</em>.</p>
         
         <h3 style="margin-top: 1rem;">Dial Visualization</h3>
         <img src="./assets/dial_animation.gif" alt="Animated Dial" style="max-width: 100%; border: 1px solid #00cc00;" />
@@ -26,7 +26,7 @@ export default {
           <div style="margin: 1rem 0;">
             <strong>Part 1: Count Rotations Ending at 0</strong>
             <p style="margin: 0.5rem 0; color: #cccccc;">
-              Starting at position 0, apply each rotation. Count how many rotations end with the dial at position 0.
+              Starting at <em>position 0</em>, apply each rotation. Count how many rotations <em>end with the dial at position 0</em>.
             </p>
             <div class="code-block" style="font-size: 12px;">
 <pre>def simulate_dial(rotations):
@@ -48,7 +48,7 @@ export default {
           <div style="margin: 1rem 0;">
             <strong>Part 2: Count All Clicks Through 0</strong>
             <p style="margin: 0.5rem 0; color: #cccccc;">
-              Count every single click that passes through position 0 during rotation, not just the ending position.
+              Count <em>every single click</em> that passes through <em>position 0</em> during rotation, not just the ending position.
             </p>
             <div class="code-block" style="font-size: 12px;">
 <pre>def simulate_dial_with_clicks(rotations):
