@@ -16,7 +16,7 @@ aoc2025/
 │  │  └─ routing.js     # Sync selected day <-> URL (#day=3)
 │  ├─ days/
 │  │  ├─ index.js       # Registry of all days
-│  │  ├─ day01.js       # Day 1 module (Dial Safe)
+│  │  ├─ day01.js       # Day 1 module (Secret Entrance)
 │  │  ├─ day02.js       # Day 2 module (Gift Shop)
 │  │  └─ day12.js       # Stubs until unlocked
 │  ├─ core/
