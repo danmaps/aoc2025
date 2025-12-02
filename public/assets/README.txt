@@ -1,0 +1,1 @@
+Place static assets used by puzzles here. For Day 1, copy dial_static.png and dial_animation.gif into this folder.

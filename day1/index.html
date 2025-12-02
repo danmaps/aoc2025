@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Day 1 - Advent of Code 2025</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: #0f0f23;
+      color: #cccccc;
+      font-family: 'Courier New', monospace;
+      padding: 2rem;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #00cc00;
+      margin-bottom: 1rem;
+      text-shadow: 0 0 5px #00cc00;
+    }
+
+    .puzzle-link {
+      display: inline-block;
+      margin-bottom: 2rem;
+      color: #009900;
+      text-decoration: none;
+      border: 1px solid #009900;
+      padding: 0.5rem 1rem;
+      transition: all 0.3s;
+    }
+
+    .puzzle-link:hover {
+      background: #009900;
+      color: #0f0f23;
+    }
+
+    h2 {
+      color: #ffff00;
+      margin: 2rem 0 1rem 0;
+      font-size: 1.5rem;
+    }
+
+    .visualization {
+      margin: 2rem 0;
+      text-align: center;
+    }
+
+    .visualization img {
+      max-width: 100%;
+      border: 2px solid #00cc00;
+      border-radius: 4px;
+    }
+
+    .solution-section {
+      background: #10101a;
+      border: 1px solid #00cc00;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      border-radius: 4px;
+    }
+
+    .solution-section h3 {
+      color: #00cc00;
+      margin-bottom: 1rem;
+    }
+
+    p {
+      margin: 1rem 0;
+      line-height: 1.8;
+    }
+
+    .answer {
+      color: #ffff00;
+      font-size: 1.5rem;
+      font-weight: bold;
+      display: inline-block;
+      background: #0a0a0a;
+      padding: 0.5rem 1rem;
+      border: 1px solid #ffff00;
+      margin: 0.5rem 0;
+    }
+
+    code {
+      background: #0a0a0a;
+      color: #00cc00;
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+    }
+
+    .back-link {
+      display: inline-block;
+      margin-top: 2rem;
+      color: #009900;
+      text-decoration: none;
+      border: 1px solid #009900;
+      padding: 0.5rem 1rem;
+      transition: all 0.3s;
+    }
+
+    .back-link:hover {
+      background: #009900;
+      color: #0f0f23;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>--- Day 1: Dial Safe ---</h1>
+    
+    <a href="https://adventofcode.com/2025/day/1" target="_blank" class="puzzle-link">[View Original Puzzle]</a>
+
+    <p>
+      This puzzle involves simulating a circular dial with 10 positions (0-9) that can be rotated clockwise or counterclockwise. 
+      The challenge is to track how many times the dial passes through specific positions during a series of rotations.
+    </p>
+
+    <div class="solution-section">
+      <h3>Part 1: Count Ending Positions at 0</h3>
+      <p>
+        In Part 1, we count how many rotations end with the dial at position 0. 
+        Starting from position 0, we apply each rotation instruction and check if the final position equals 0.
+      </p>
+      <div class="answer">Answer: See solution.py output</div>
+    </div>
+
+    <div class="visualization">
+      <h2>Dial Visualization</h2>
+      <img src="dial_static.png" alt="Static Dial Visualization">
+      <p style="margin-top: 1rem;">Static visualization showing final positions after each rotation</p>
+    </div>
+
+    <div class="visualization">
+      <img src="dial_animation.gif" alt="Animated Dial Visualization">
+      <p style="margin-top: 1rem;">Animated visualization showing the dial in motion</p>
+    </div>
+
+    <div class="solution-section">
+      <h3>Part 2: Count All Clicks Through 0</h3>
+      <p>
+        In Part 2, we count every single click through position 0 during rotations, not just the ending positions. 
+        For example, a rotation of +3 from position 8 passes through positions 9, 0, 1, and 2 — that's one click through 0.
+      </p>
+      <div class="answer">Answer: See solution2.py output</div>
+    </div>
+
+    <h2>Implementation</h2>
+    <p>
+      The solution is implemented in Python using <code>matplotlib</code> for visualizations. 
+      The dial is represented as a circular plot with 10 positions, and each rotation is tracked step-by-step.
+    </p>
+
+    <ul style="margin-left: 2rem; margin-top: 1rem;">
+      <li><code>solution.py</code> - Part 1 solution with static and animated visualizations</li>
+      <li><code>solution2.py</code> - Part 2 solution tracking all clicks through zero</li>
+    </ul>
+
+    <a href="../index.html" class="back-link">← Back to Calendar</a>
+  </div>
+</body>
+</html>
