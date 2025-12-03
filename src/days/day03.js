@@ -110,7 +110,16 @@ async function animateBank(line, rowEl, bankTextEl, bankMaxEl) {
 
   const batteries = [...rowEl.querySelectorAll(".battery")];
 
-  await new Promise(resolve => setTimeout(resolve, 250));
+  // Add explanation overlay
+  let explanationDiv = rowEl.parentElement.querySelector('.explanation-overlay');
+  if (!explanationDiv) {
+    explanationDiv = document.createElement('div');
+    explanationDiv.className = 'explanation-overlay';
+    explanationDiv.style.cssText = 'margin-top: 0.5rem; padding: 0.5rem; background: #1a1a2e; border: 1px solid #00cc00; border-radius: 4px; color: #00cc00; font-size: 0.9rem; min-height: 2rem;';
+    rowEl.parentElement.insertBefore(explanationDiv, rowEl.nextSibling);
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 150 / globalSpeedMultPart1));
   batteries.forEach((b, idx) => {
     const fill = b.querySelector(".fill");
     const d = digits[idx];
@@ -119,20 +128,57 @@ async function animateBank(line, rowEl, bankTextEl, bankMaxEl) {
       fill.style.transform = `scaleY(${scale})`;
     });
   });
-  await new Promise(resolve => setTimeout(resolve, 600));
+  await new Promise(resolve => setTimeout(resolve, 300 / globalSpeedMultPart1));
 
+  explanationDiv.textContent = 'Scanning for best 2-digit combination...';
+
+  // Precompute rightMax for visualization
+  const rightMax = Array(digits.length).fill(0);
+  for (let i = digits.length - 2; i >= 0; i--) {
+    rightMax[i] = Math.max(digits[i + 1], rightMax[i + 1]);
+  }
+
+  let currentBest = 0;
   for (let i = 0; i < digits.length - 1; i++) {
     const b = batteries[i];
+    const tensDigit = digits[i];
+    const onesDigit = rightMax[i];
+    const candidate = tensDigit * 10 + onesDigit;
+    
+    // Highlight current tens position
     b.style.transform = "scale(1.15)";
-    b.style.boxShadow = "0 0 20px #00cc00, 0 0 40px #00cc00";
-    b.style.borderColor = "#00cc00";
-    await new Promise(r => setTimeout(r, 100));
+    b.style.boxShadow = "0 0 20px #ffeb3b, 0 0 40px #ffeb3b";
+    b.style.borderColor = "#ffeb3b";
+    explanationDiv.innerHTML = `Checking position ${i}: <strong>${tensDigit}</strong> as tens digit → best ones to right is <strong>${onesDigit}</strong> → candidate = <strong>${candidate}</strong>${candidate > currentBest ? ' ✓ NEW BEST!' : ''}`;
+    
+    // Show the best ones digit to the right
+    for (let j = i + 1; j < digits.length; j++) {
+      if (digits[j] === onesDigit) {
+        batteries[j].style.boxShadow = "0 0 12px #ff80ab";
+        batteries[j].style.borderColor = "#ff80ab";
+        batteries[j].style.transform = "scale(1.08)";
+        break;
+      }
+    }
+    
+    await new Promise(r => setTimeout(r, 250 / globalSpeedMultPart1));
+    
+    if (candidate > currentBest) currentBest = candidate;
+    
+    // Clear highlights if not the final best
     if (i !== bestI) {
       b.style.transform = "";
       b.style.boxShadow = "";
       b.style.borderColor = "";
+      for (let j = i + 1; j < digits.length; j++) {
+        batteries[j].style.boxShadow = "";
+        batteries[j].style.borderColor = "";
+        batteries[j].style.transform = "";
+      }
     }
   }
+
+  explanationDiv.textContent = `Final result: ${digits[bestI]} × 10 + ${digits[bestJ]} = ${best}`;
 
   batteries.forEach(b => b.classList.add("dimmed"));
   const tensBattery = batteries[bestI];
@@ -164,6 +210,126 @@ async function animateBank(line, rowEl, bankTextEl, bankMaxEl) {
   step();
 }
 
+let globalSpeedMultPart1 = 1;
+let globalSpeedMultPart2 = 1;
+
+async function animateBankPart2(line, rowEl, bankTextEl, bankMaxEl, speedMult = 1) {
+  bankTextEl.textContent = line;
+  const { best, digits } = maxJoltageForBank(line, 12);
+  createBatteryRow(rowEl, digits);
+
+  const batteries = [...rowEl.querySelectorAll(".battery")];
+
+  // Add explanation overlay
+  let explanationDiv = rowEl.parentElement.querySelector('.explanation-overlay');
+  if (!explanationDiv) {
+    explanationDiv = document.createElement('div');
+    explanationDiv.className = 'explanation-overlay';
+    explanationDiv.style.cssText = 'margin-top: 0.5rem; padding: 0.5rem; background: #1a1a2e; border: 1px solid #7cf6ff; border-radius: 4px; color: #7cf6ff; font-size: 0.9rem; min-height: 2rem;';
+    rowEl.parentElement.insertBefore(explanationDiv, rowEl.nextSibling);
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 150 / globalSpeedMultPart2));
+  batteries.forEach((b, idx) => {
+    const fill = b.querySelector(".fill");
+    const d = digits[idx];
+    const scale = d / 9;
+    requestAnimationFrame(() => {
+      fill.style.transform = `scaleY(${scale})`;
+    });
+  });
+  await new Promise(resolve => setTimeout(resolve, 300 / globalSpeedMultPart2));
+
+  // Animate the greedy selection algorithm step-by-step
+  const toRemove = digits.length - 12;
+  const stack = [];
+  let removed = 0;
+  
+  explanationDiv.innerHTML = `Greedy algorithm: keep 12 largest digits in order (remove ${toRemove} smallest)`;
+  await new Promise(r => setTimeout(r, 400 / globalSpeedMultPart2));
+  
+  for (let i = 0; i < digits.length; i++) {
+    // Highlight current battery being considered
+    const current = batteries[i];
+    current.style.transform = "scale(1.15)";
+    current.style.boxShadow = "0 0 20px #7cf6ff, 0 0 40px #7cf6ff";
+    current.style.borderColor = "#7cf6ff";
+    explanationDiv.innerHTML = `Position ${i}: considering digit <strong>${digits[i]}</strong>...`;
+    await new Promise(r => setTimeout(r, 200 / globalSpeedMultPart2));
+    
+    // Check if we need to remove smaller batteries before this one
+    const removedIndices = [];
+    while (stack.length > 0 && 
+           removed < toRemove && 
+           digits[i] > digits[stack[stack.length - 1]]) {
+      const removedIdx = stack.pop();
+      const removedDigit = digits[removedIdx];
+      removedIndices.push(removedIdx);
+      removed++;
+      
+      // Show removal animation with explanation
+      const removedBattery = batteries[removedIdx];
+      removedBattery.style.transform = "scale(0.85)";
+      removedBattery.style.opacity = "0.2";
+      removedBattery.style.borderColor = "#ff4444";
+      explanationDiv.innerHTML = `<strong>${digits[i]} &gt; ${removedDigit}</strong> → removing smaller digit <strong>${removedDigit}</strong> at position ${removedIdx} (${removed}/${toRemove} removed)`;
+      await new Promise(r => setTimeout(r, 250 / globalSpeedMultPart2));
+    }
+    
+    // Add current to stack (keep it)
+    stack.push(i);
+    current.style.transform = "scale(1.08)";
+    current.style.boxShadow = "0 0 18px #00cc0077";
+    current.style.borderColor = "#00cc00";
+    const action = removedIndices.length > 0 ? `Replaced ${removedIndices.length} smaller digit(s)` : 'No smaller digits ahead';
+    explanationDiv.innerHTML = `Keeping digit <strong>${digits[i]}</strong> at position ${i}. ${action}. Stack size: ${stack.length}`;
+    await new Promise(r => setTimeout(r, 200 / globalSpeedMultPart2));
+    
+    // Reset highlight
+    current.style.transform = "";
+    current.style.boxShadow = "";
+    current.style.borderColor = "";
+  }
+  
+  // Remove from the end if needed
+  while (removed < toRemove) {
+    const removedIdx = stack.pop();
+    removed++;
+    const removedBattery = batteries[removedIdx];
+    removedBattery.style.transform = "scale(0.85)";
+    removedBattery.style.opacity = "0.2";
+    removedBattery.style.borderColor = "#ff4444";
+    explanationDiv.innerHTML = `Removing from end: digit <strong>${digits[removedIdx]}</strong> at position ${removedIdx} (${removed}/${toRemove} removed)`;
+    await new Promise(r => setTimeout(r, 200 / globalSpeedMultPart2));
+  }
+
+  explanationDiv.innerHTML = `Selection complete! Kept 12 largest digits in original order.`;
+  await new Promise(r => setTimeout(r, 300 / globalSpeedMultPart2));
+
+  // Final highlight: dim all, then show selected 12
+  batteries.forEach(b => b.classList.add("dimmed"));
+  stack.forEach(idx => {
+    batteries[idx].classList.remove("dimmed");
+    batteries[idx].classList.add("selected");
+  });
+
+  // Animate counter
+  const target = best;
+  let current = BigInt(0);
+  const stepSize = target / BigInt(30);
+  const stepCount = () => {
+    if (current < target) {
+      current += stepSize > BigInt(0) ? stepSize : BigInt(1);
+      if (current > target) current = target;
+      bankMaxEl.textContent = current.toString();
+      requestAnimationFrame(stepCount);
+    } else {
+      bankMaxEl.textContent = target.toString();
+    }
+  };
+  stepCount();
+}
+
 export default {
   title: '--- Day 3: Lobby ---',
   description: 'Find maximum joltage from battery banks.',
@@ -188,7 +354,7 @@ export default {
         <p>In the lobby, you need to restore power to the <em>escalators</em>. Emergency <em>batteries</em> are arranged into <em>banks</em>, each labeled with a <em>joltage rating</em> (1-9 digits). For each bank, find the <em>maximum two-digit joltage</em> by turning on exactly two batteries where the <em>tens digit comes before the ones digit</em> in the bank string.</p>
 
         <div style="margin-top: 1.5rem;">
-          <h3>&gt; Battery Bank Visualization</h3>
+          <h3>&gt; Part 1: Battery Bank Visualization (2-Digit)</h3>
           <div style="margin: 1rem 0;">
             <label style="color: #00cc00; display: block; margin-bottom: 0.5rem;">&gt; Paste your puzzle input:</label>
             <textarea id="day3-input" style="width: 100%; min-height: 100px; background: #0a0a0a; color: #00cc00; border: 1px solid #333; padding: 0.75rem; font-family: 'Source Code Pro', monospace; font-size: 12px; resize: vertical;">987654321111111
@@ -198,6 +364,11 @@ export default {
             <button id="day3-animate-btn" class="btn" style="margin-top: 0.5rem;">[Animate First Bank]</button>
             <button id="day3-animate-all-btn" class="btn" style="margin-top: 0.5rem; margin-left: 0.5rem;">[Animate All Banks]</button>
             <button id="day3-calculate-btn" class="btn" style="margin-top: 0.5rem; margin-left: 0.5rem;">[Calculate All and Reveal Total]</button>
+            <div style="display: inline-flex; align-items: center; margin-left: 1rem; gap: 0.5rem;">
+              <label for="day3-speed" style="color: #00cc00; margin: 0;">Speed:</label>
+              <input id="day3-speed" type="range" min="1" max="100" value="50" style="accent-color:#00cc00; width:120px;" />
+              <span id="day3-speed-label" style="color:#cccccc;">1x</span>
+            </div>
           </div>
 
           <div style="margin-top: 1rem;">
@@ -205,11 +376,41 @@ export default {
             <div id="day3-bank-text" style="font-family: monospace; color: #9be7ff; font-size: 1.1rem;"></div>
           </div>
 
-          <div id="day3-battery-row" class="battery-row" style="display: flex; gap: 0.4rem; align-items: flex-end; margin: 1rem 0; position: relative; min-height: 100px; max-width: 100%;"></div>
+          <div id="day3-battery-row" class="battery-row" style="display: flex; gap: 0.4rem; align-items: flex-end; margin: 1rem 0; position: relative; min-height: 100px; max-width: 100%; padding-left: 24px; overflow: visible;"></div>
 
           <div style="margin-top: 1rem; padding: 1rem; background: #0a0a0a; border: 1px solid #00cc00;">
             <div style="margin-bottom: 0.5rem;">Max joltage for this bank: <span id="day3-bank-max" style="color: #ffff00; font-size: 1.2rem; font-family: monospace;">0</span></div>
-            <div style="margin-bottom: 0.5rem;">Total output joltage (Part 1): <span id="day3-total" style="color: #7cf6ff; font-size: 1.5rem; font-family: monospace;">0</span></div>
+            <div>Total output joltage (Part 1): <span id="day3-total" style="color: #7cf6ff; font-size: 1.5rem; font-family: monospace;">0</span></div>
+          </div>
+        </div>
+
+        <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #333;">
+          <h3>&gt; Part 2: Battery Bank Visualization (12-Digit)</h3>
+          <div style="margin: 1rem 0;">
+            <label style="color: #00cc00; display: block; margin-bottom: 0.5rem;">&gt; Paste your puzzle input:</label>
+            <textarea id="day3-input-part2" style="width: 100%; min-height: 100px; background: #0a0a0a; color: #00cc00; border: 1px solid #333; padding: 0.75rem; font-family: 'Source Code Pro', monospace; font-size: 12px; resize: vertical;">987654321111111
+811111111111119
+234234234234278
+818181911112111</textarea>
+            <button id="day3-animate-btn-part2" class="btn" style="margin-top: 0.5rem;">[Animate First Bank]</button>
+            <button id="day3-animate-all-btn-part2" class="btn" style="margin-top: 0.5rem; margin-left: 0.5rem;">[Animate All Banks]</button>
+            <button id="day3-calculate-btn-part2" class="btn" style="margin-top: 0.5rem; margin-left: 0.5rem;">[Calculate All and Reveal Total]</button>
+            <div style="display: inline-flex; align-items: center; margin-left: 1rem; gap: 0.5rem;">
+              <label for="day3-speed-part2" style="color: #00cc00; margin: 0;">Speed:</label>
+              <input id="day3-speed-part2" type="range" min="1" max="100" value="50" style="accent-color:#00cc00; width:120px;" />
+              <span id="day3-speed-label-part2" style="color:#cccccc;">1x</span>
+            </div>
+          </div>
+
+          <div style="margin-top: 1rem;">
+            <div style="color: #cccccc; margin-bottom: 0.5rem;">Current bank:</div>
+            <div id="day3-bank-text-part2" style="font-family: monospace; color: #9be7ff; font-size: 1.1rem;"></div>
+          </div>
+
+          <div id="day3-battery-row-part2" class="battery-row" style="display: flex; gap: 0.4rem; align-items: flex-end; margin: 1rem 0; position: relative; min-height: 100px; max-width: 100%; padding-left: 24px; overflow: visible;"></div>
+
+          <div style="margin-top: 1rem; padding: 1rem; background: #0a0a0a; border: 1px solid #00cc00;">
+            <div style="margin-bottom: 0.5rem;">Max joltage for this bank: <span id="day3-bank-max-part2" style="color: #ffff00; font-size: 1.2rem; font-family: monospace;">0</span></div>
             <div>Total output joltage (Part 2): <span id="day3-total-part2" style="color: #7cf6ff; font-size: 1.5rem; font-family: monospace;">0</span></div>
           </div>
         </div>
@@ -339,6 +540,12 @@ export default {
             opacity: 0.4;
           }
 
+          .battery.selected {
+            box-shadow: 0 0 18px #7cf6ff77;
+            transform: scale(1.08);
+            border-color: #7cf6ff;
+          }
+
           .best-label {
             position: absolute;
             top: -32px;
@@ -371,11 +578,22 @@ export default {
     const bankTextEl = document.getElementById('day3-bank-text');
     const bankMaxEl = document.getElementById('day3-bank-max');
     const totalEl = document.getElementById('day3-total');
-    const totalPart2El = document.getElementById('day3-total-part2');
+    const speedInput = document.getElementById('day3-speed');
+    const speedLabel = document.getElementById('day3-speed-label');
 
     let shouldSkip = false;
 
     if (!animateBtn || !inputEl) return;
+
+    if (speedInput) {
+      const updateSpeed = () => {
+        const v = Number(speedInput.value);
+        globalSpeedMultPart1 = Math.pow(v / 50, 2);
+        speedLabel.textContent = globalSpeedMultPart1.toFixed(1) + 'x';
+      };
+      speedInput.addEventListener('input', updateSpeed);
+      updateSpeed();
+    }
 
     animateBtn.addEventListener('click', async () => {
       const raw = inputEl.value.trim();
@@ -412,11 +630,7 @@ export default {
         total += bankValue;
         totalEl.textContent = total;
         
-        const bankValuePart2 = maxJoltageForBank(line, 12).best;
-        totalPart2 += bankValuePart2;
-        totalPart2El.textContent = totalPart2.toString();
-        
-        await new Promise(r => setTimeout(r, 800));
+        await new Promise(r => setTimeout(r, 400 / globalSpeedMultPart1));
       }
       
       totalEl.textContent = total;
@@ -436,17 +650,104 @@ export default {
       } else {
         // Calculate instantly without animation
         let total = 0;
-        let totalPart2 = BigInt(0);
         
         for (const line of lines) {
           total += maxJoltageForBank(line, 2).best;
-          totalPart2 += maxJoltageForBank(line, 12).best;
         }
         
         totalEl.textContent = total;
-        totalPart2El.textContent = totalPart2.toString();
         bankTextEl.textContent = 'Calculated all banks instantly';
         bankMaxEl.textContent = '—';
+      }
+    });
+
+    // Part 2 handlers
+    const animateBtnPart2 = document.getElementById('day3-animate-btn-part2');
+    const animateAllBtnPart2 = document.getElementById('day3-animate-all-btn-part2');
+    const calculateBtnPart2 = document.getElementById('day3-calculate-btn-part2');
+    const inputElPart2 = document.getElementById('day3-input-part2');
+    const rowElPart2 = document.getElementById('day3-battery-row-part2');
+    const bankTextElPart2 = document.getElementById('day3-bank-text-part2');
+    const bankMaxElPart2 = document.getElementById('day3-bank-max-part2');
+    const totalElPart2 = document.getElementById('day3-total-part2');
+    const speedInputPart2 = document.getElementById('day3-speed-part2');
+    const speedLabelPart2 = document.getElementById('day3-speed-label-part2');
+
+    let shouldSkipPart2 = false;
+
+    if (!animateBtnPart2 || !inputElPart2) return;
+
+    if (speedInputPart2) {
+      const updateSpeed = () => {
+        const v = Number(speedInputPart2.value);
+        globalSpeedMultPart2 = Math.pow(v / 50, 2);
+        speedLabelPart2.textContent = globalSpeedMultPart2.toFixed(1) + 'x';
+      };
+      speedInputPart2.addEventListener('input', updateSpeed);
+      updateSpeed();
+    }
+
+    animateBtnPart2.addEventListener('click', async () => {
+      const raw = inputElPart2.value.trim();
+      if (!raw) return;
+      const firstLine = raw.split('\n')[0].trim();
+      bankMaxElPart2.textContent = '0';
+      await animateBankPart2(firstLine, rowElPart2, bankTextElPart2, bankMaxElPart2);
+    });
+
+    animateAllBtnPart2.addEventListener('click', async () => {
+      const raw = inputElPart2.value.trim();
+      if (!raw) return;
+      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+      let totalPart2 = BigInt(0);
+      
+      shouldSkipPart2 = false;
+      animateAllBtnPart2.disabled = true;
+      animateBtnPart2.disabled = true;
+      
+      for (let i = 0; i < lines.length; i++) {
+        if (shouldSkipPart2) {
+          // Calculate remaining banks instantly
+          for (let j = i; j < lines.length; j++) {
+            totalPart2 += maxJoltageForBank(lines[j], 12).best;
+          }
+          break;
+        }
+        
+        const line = lines[i];
+        bankMaxElPart2.textContent = '0';
+        await animateBankPart2(line, rowElPart2, bankTextElPart2, bankMaxElPart2);
+        const bankValuePart2 = maxJoltageForBank(line, 12).best;
+        totalPart2 += bankValuePart2;
+        totalElPart2.textContent = totalPart2.toString();
+        
+        await new Promise(r => setTimeout(r, 400 / globalSpeedMultPart2));
+      }
+      
+      totalElPart2.textContent = totalPart2.toString();
+      animateAllBtnPart2.disabled = false;
+      animateBtnPart2.disabled = false;
+    });
+
+    calculateBtnPart2.addEventListener('click', () => {
+      const raw = inputElPart2.value.trim();
+      if (!raw) return;
+      const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+      
+      if (shouldSkipPart2) {
+        // Already animating, just skip to end
+        shouldSkipPart2 = true;
+      } else {
+        // Calculate instantly without animation
+        let totalPart2 = BigInt(0);
+        
+        for (const line of lines) {
+          totalPart2 += maxJoltageForBank(line, 12).best;
+        }
+        
+        totalElPart2.textContent = totalPart2.toString();
+        bankTextElPart2.textContent = 'Calculated all banks instantly';
+        bankMaxElPart2.textContent = '—';
       }
     });
   }
