@@ -38,7 +38,29 @@ function bootstrap() {
     setDay(day);
     saveLastDay(day);
     renderDay();
+    // Close drawer on selection (mobile)
+    const sidebar = document.getElementById('sidebar');
+    const backdrop = document.getElementById('menu-backdrop');
+    if (sidebar) sidebar.classList.remove('open');
+    if (backdrop) backdrop.classList.remove('show');
   });
+
+  // Hamburger toggle
+  const menuBtn = document.getElementById('menu-btn');
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('menu-backdrop');
+  if (menuBtn && sidebar) {
+    menuBtn.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+      if (backdrop) backdrop.classList.toggle('show');
+    });
+  }
+  if (backdrop && sidebar) {
+    backdrop.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      backdrop.classList.remove('show');
+    });
+  }
 }
 
 bootstrap();

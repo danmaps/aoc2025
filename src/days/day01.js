@@ -74,8 +74,8 @@ export default {
 
         <h3 style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #333;">Solutions (Python)</h3>
         <p style="font-size: 0.95rem;">
-          <a href="https://github.com/danmaps/aoc2025/blob/053cd76e3bf6e14f175d747d9ca5bba05188ab73/day1/solution.py" target="_blank">Part 1 (solution.py)</a> | 
-          <a href="https://github.com/danmaps/aoc2025/blob/38bb24c649c4cb6ba4426b45f39f3f056877477b/day1/solution2.py" target="_blank">Part 2 (solution2.py)</a>
+          <a href="https://github.com/danmaps/aoc2025/blob/053cd76e3bf6e14f175d747d9ca5bba05188ab73/src/legacy/day1/solution.py" target="_blank">Part 1 (solution.py)</a> | 
+          <a href="https://github.com/danmaps/aoc2025/blob/38bb24c649c4cb6ba4426b45f39f3f056877477b/src/legacy/day1/solution2.py" target="_blank">Part 2 (solution2.py)</a>
         </p>
       </div>
     `;

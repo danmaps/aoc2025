@@ -1,6 +1,6 @@
-# Advent of Code 2025 - Single Page App
+# Advent of Code 2025 — Single Page App
 
-This is a lightweight single-page app (no bundler) that renders AoC 2025 puzzles and solutions with an AoC-like theme.
+Lightweight SPA (no bundler) for viewing and solving AoC 2025 puzzles with an Advent of Code–style theme.
 
 ## Structure
 ```
@@ -15,10 +15,8 @@ aoc2025/
 │  │  ├─ layout.js      # DOM helpers and rendering functions
 │  │  └─ routing.js     # Sync selected day <-> URL (#day=3)
 │  ├─ days/
-│  │  ├─ index.js       # Registry of all days
-│  │  ├─ day01.js       # Day 1 module (Secret Entrance)
-│  │  ├─ day02.js       # Day 2 module (Gift Shop)
-│  │  └─ day12.js       # Stubs until unlocked
+│  │  ├─ index.js       # Registry of all day modules
+│  │  ├─ dayNN.js       # Individual day modules (render + logic)
 │  ├─ core/
 │  │  └─ storage.js     # localStorage helpers
 │  └─ styles/
@@ -42,10 +40,9 @@ python -m http.server 8000
 Then open `http://localhost:8000`.
 
 ## Adding New Days
-- Create `src/days/dayNN.js` exporting `{ title, description, unlocked, stars, render(), solvePart1(), solvePart2(), attachHandlers(root) }`.
-- Register it in `src/days/index.js`.
-- Use `storage.js` to persist inputs per day.
+- Create `src/days/dayNN.js` that exports `{ title, description, unlocked, stars, render(), solvePart1(), solvePart2(), attachHandlers(root) }`.
+- Register the module in `src/days/index.js`.
+- Use `src/core/storage.js` to persist inputs per day.
 
 ## Notes
-- Day 1 visualizations expect images in `public/assets/`.
-- Day 2 logic mirrors earlier React version in plain modules.
+- Visual assets should be placed in `public/assets/` and referenced from day modules.
