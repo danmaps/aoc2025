@@ -7,6 +7,9 @@ export default {
     return `
       <div class="article">
         <h2>--- Day 4: Printing Department ---</h2>
+        <div style="margin-bottom: 1rem;">
+          <a href="https://adventofcode.com/2025/day/4" target="_blank" style="color: #009900;">[View Puzzle]</a>
+        </div>
         <p>
           Find paper rolls (@) that can be accessed by forklifts - those with fewer than 4 neighbors in the 8 adjacent positions.
         </p>
@@ -51,6 +54,64 @@ export default {
             <div>Round: <span id="day04-round" style="color:#ffff00; font-family:monospace;">0</span></div>
             <div>Removed this round: <span id="day04-removed-round" style="color:#ff6666; font-family:monospace;">0</span></div>
             <div>Total removed: <span id="day04-total-removed" style="color:#7cf6ff; font-size:1.2rem; font-family:monospace;">0</span></div>
+          </div>
+        </div>
+
+        <div style="margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #333;">
+          <h3>&gt; How This Works</h3>
+          
+          <div style="margin-top: 1.5rem;">
+            <h4 style="color: #00cc00; margin-top: 1rem; margin-bottom: 0.5rem;">Part 1: Neighbor Counting</h4>
+            <p>Each paper roll (@) is checked against its 8 adjacent neighbors (orthogonal + diagonal). Rolls with fewer than 4 neighbors are considered "accessible".</p>
+            <div style="background: #1a1a1a; padding: 0.75rem; border-left: 3px solid #00cc00; margin: 0.75rem 0; font-family: 'Source Code Pro', monospace; font-size: 11px; overflow-x: auto;">
+              <div style="color: #aaa;">const directions = [</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;[-1, -1], [-1, 0], [-1, 1],</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;[0, -1],&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[0, 1],</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;[1, -1],&nbsp;&nbsp;[1, 0],&nbsp;&nbsp;[1, 1]</div>
+              <div style="color: #aaa;">];</div>
+              <div style="margin-top: 0.5rem; color: #aaa;">for (const [dr, dc] of directions) {</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;const nr = r + dr, nc = c + dc;</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;if (nr >= 0 && nr < rows && nc >= 0 && nc < cols)</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;&nbsp;&nbsp;if (grid[nr][nc] === '@') count++;</div>
+              <div style="color: #aaa;">}</div>
+            </div>
+            <p style="font-size: 12px; color: #bbb;">The visualization colors each cell by neighbor count: green (0) → orange (3) → dark red (8). Cells marked with ✓ are accessible.</p>
+          </div>
+
+          <div style="margin-top: 1.5rem;">
+            <h4 style="color: #00cc00; margin-top: 1rem; margin-bottom: 0.5rem;">Part 2: Iterative Removal</h4>
+            <p>Accessible rolls are removed one round at a time. After each removal, neighbor counts recalculate only for adjacent cells. This process repeats until no accessible rolls remain.</p>
+            <div style="background: #1a1a1a; padding: 0.75rem; border-left: 3px solid #00cc00; margin: 0.75rem 0; font-family: 'Source Code Pro', monospace; font-size: 11px; overflow-x: auto;">
+              <div style="color: #aaa;">while (true) {</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;const accessible = [];</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;for (const key of neighborMap.keys()) {</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;&nbsp;&nbsp;if (neighborMap.get(key) &lt; 4)</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;accessible.push(...);</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;}</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;if (accessible.length === 0) break;</div>
+              <div style="color: #aaa;"></div>
+              <div style="color: #aaa;">&nbsp;&nbsp;for (const {r, c} of accessible) {</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;&nbsp;&nbsp;grid[r][c] = '.';</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;&nbsp;&nbsp;for (const [dr, dc] of directions) {</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;const neighborKey = \`\${nr},\${nc}\`;</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;neighborMap.set(neighborKey,</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;neighborMap.get(neighborKey) - 1);</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;&nbsp;&nbsp;}</div>
+              <div style="color: #aaa;">&nbsp;&nbsp;}</div>
+              <div style="color: #aaa;">}</div>
+            </div>
+            <p style="font-size: 12px; color: #bbb;"><strong>Optimization:</strong> Neighbor counts are cached in a Map for O(1) lookup. When rolls are removed, only adjacent cells have their counts decremented—this avoids recalculating the entire grid each round.</p>
+          </div>
+
+          <div style="margin-top: 1.5rem;">
+            <h4 style="color: #00cc00; margin-top: 1rem; margin-bottom: 0.5rem;">Visualization Features</h4>
+            <ul style="font-size: 12px; color: #bbb; margin-left: 1rem;">
+              <li><strong>Part 1 Animation:</strong> Scans each cell (white highlight) → checks neighbors (cyan) → applies color by count</li>
+              <li><strong>Part 2 Animation:</strong> Highlights all accessible rolls (red) → fades them out → removes from grid → updates neighbor counts</li>
+              <li><strong>Speed Sliders:</strong> Control animation playback from 0.1x (slow motion) to 50x (fast-forward)</li>
+              <li><strong>Reveal Buttons:</strong> Skip animation and show instant results</li>
+              <li><strong>Dynamic Scaling:</strong> Canvas automatically sizes to fit grids up to 200+ columns while keeping all cells visible</li>
+            </ul>
           </div>
         </div>
       </div>

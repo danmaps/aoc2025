@@ -357,6 +357,9 @@ export default {
       <div class="article">
         <h2>--- Day 3: Lobby ---</h2>
         <div style="margin-bottom: 1rem;">
+          <a href="https://adventofcode.com/2025/day/3" target="_blank" style="color: #009900;">[View Puzzle]</a>
+        </div>
+        <div style="margin-bottom: 1rem;">
         <p>In the lobby, you need to restore power to the <em>escalators</em>. Emergency <em>batteries</em> are arranged into <em>banks</em>, each labeled with a <em>joltage rating</em> (1-9 digits). In <em>Part 1</em>, find the <em>maximum two-digit joltage</em> by turning on exactly two batteries where the tens digit comes before the ones digit. In <em>Part 2</em>, turn on <em>exactly 12 batteries</em> per bank to overcome static friction, maximizing the <em>12-digit joltage</em>.</p>
         </div>
         <p>In the lobby, you need to restore power to the <em>escalators</em>. Emergency <em>batteries</em> are arranged into <em>banks</em>, each labeled with a <em>joltage rating</em> (1-9 digits). For each bank, find the <em>maximum two-digit joltage</em> by turning on exactly two batteries where the <em>tens digit comes before the ones digit</em> in the bank string.</p>
