@@ -45,7 +45,7 @@ function solve(input, part) {
 export default {
   title: '--- Day 2: Gift Shop ---',
   description: 'Find invalid product IDs in ranged inputs.',
-  stars: '★★',
+  stars: '',
   unlocked: true,
   solvePart1(input) { return solve(input, 'part1'); },
   solvePart2(input) { return solve(input, 'part2'); },

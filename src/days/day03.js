@@ -106,6 +106,10 @@ function createBatteryRow(container, digits) {
 async function animateBank(line, rowEl, bankTextEl, bankMaxEl) {
   bankTextEl.textContent = line;
   const { best, bestI, bestJ, digits } = maxJoltageForBank(line);
+  
+  // Clear previous animation state
+  rowEl.innerHTML = '';
+  
   createBatteryRow(rowEl, digits);
 
   const batteries = [...rowEl.querySelectorAll(".battery")];
@@ -213,9 +217,13 @@ async function animateBank(line, rowEl, bankTextEl, bankMaxEl) {
 let globalSpeedMultPart1 = 1;
 let globalSpeedMultPart2 = 1;
 
-async function animateBankPart2(line, rowEl, bankTextEl, bankMaxEl, speedMult = 1) {
+async function animateBankPart2(line, rowEl, bankTextEl, bankMaxEl) {
   bankTextEl.textContent = line;
   const { best, digits } = maxJoltageForBank(line, 12);
+  
+  // Clear previous animation state
+  rowEl.innerHTML = '';
+  
   createBatteryRow(rowEl, digits);
 
   const batteries = [...rowEl.querySelectorAll(".battery")];
@@ -333,7 +341,7 @@ async function animateBankPart2(line, rowEl, bankTextEl, bankMaxEl, speedMult = 
 export default {
   title: '--- Day 3: Lobby ---',
   description: 'Find maximum joltage from battery banks.',
-  stars: '★★',
+  stars: '',
   unlocked: true,
   solvePart1(input) {
     const lines = input.trim().split('\n');

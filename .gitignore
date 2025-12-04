@@ -30,6 +30,4 @@ input_danny.txt
 # Generated visualizations (optional - uncomment if you don't want to track these)
 # dial_static.png
 # dial_animation.gif
-
-# Node Modules
-*node_modules*
+src/legacy/day2/node_modules/*

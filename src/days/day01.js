@@ -1,7 +1,7 @@
 export default {
   title: '--- Day 1: Secret Entrance ---',
   description: 'Simulate a circular dial and count events at or through 0.',
-  stars: '★★',
+  stars: '',
   unlocked: true,
   solvePart1(input) {
     return 'See Python solution output';

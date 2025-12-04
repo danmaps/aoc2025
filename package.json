@@ -1,8 +1,0 @@
-{
-  "name": "aoc2025-spa",
-  "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "serve": "python -m http.server -d public 8000"
-  }
-}
