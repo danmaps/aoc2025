@@ -10,7 +10,7 @@ export function renderSidebar(days, currentDay) {
     const dayId = idx; // 0-based: 0=Home, 1=Day1
     const unlocked = day.unlocked !== false;
     const classes = ['day-item', unlocked ? 'unlocked' : 'locked', dayId === currentDay ? 'active' : ''].join(' ');
-    const stars = day.stars || (isHome ? '' : '-');
+    const stars = day.stars || (isHome ? '' : '');
     return `<div class="${classes}" data-day="${dayId}"><span>${label}</span><span class="stars">${stars}</span></div>`;
   }).join('');
 }
