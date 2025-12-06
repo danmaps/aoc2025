@@ -4,7 +4,7 @@ export const els = {
 };
 
 export function renderSidebar(days, currentDay) {
-  els.sidebar.innerHTML = `<h2>Calendar</h2>` + days.map((day, idx) => {
+  els.sidebar.innerHTML = `<h2>Calendar</h2>` + days.slice(0, 13).map((day, idx) => {
     const isHome = idx === 0;
     const label = isHome ? 'Home' : `Day ${idx}`;
     const dayId = idx; // 0-based: 0=Home, 1=Day1
