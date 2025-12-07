@@ -99,7 +99,7 @@ function parseWorksheet(input, part2 = false) {
     });
   });
 
-  return { lines: padded, problems };
+  return { lines: padded, problems, width, height, padded };
 }
 
 export default {
@@ -132,6 +132,7 @@ export default {
             <button id="day06-part1" class="btn" style="margin-right: 0.5rem;">[Part 1: Top-to-Bottom]</button>
             <button id="day06-part2" class="btn" style="margin-right: 0.5rem;">[Part 2: Right-to-Left]</button>
             <button id="day06-reveal" class="btn" style="margin-right: 0.5rem;">[Reveal Both Solutions]</button>
+            <button id="day06-wheel" class="btn" style="margin-right: 0.5rem;">[Spin the Wheel]</button>
           </div>
         </div>
 
@@ -145,6 +146,7 @@ export default {
     const part1Btn = document.getElementById('day06-part1');
     const part2Btn = document.getElementById('day06-part2');
     const revealBtn = document.getElementById('day06-reveal');
+    const wheelBtn = document.getElementById('day06-wheel');
     const resultsEl = document.getElementById('day06-results');
     const vizEl = document.getElementById('day06-visualization');
 
@@ -377,6 +379,19 @@ export default {
     part1Btn.addEventListener('click', () => visualizePart(false));
     part2Btn.addEventListener('click', () => visualizePart(true));
 
+    wheelBtn.addEventListener('click', () => {
+      const input = inputEl.value.trim();
+      if (!input) {
+        resultsEl.innerHTML = '<p style="color:orange;">Please paste puzzle input first.</p>';
+        return;
+      }
+
+      const parsed = parseWorksheet(input, true);
+      vizEl.style.display = 'block';
+      vizEl.innerHTML = '';
+      wheelView.render(vizEl, parsed, true);
+    });
+
     revealBtn.addEventListener('click', () => {
       const input = inputEl.value.trim();
       if (!input) {
@@ -439,3 +454,426 @@ export default {
     });
   }
 };
+
+// ===== KINETIC WHEEL VISUALIZATION =====
+export const wheelView = {
+  render(container, parsed, isPart2 = false) {
+    const data = isPart2 ? parsed : parsed;
+    
+    container.innerHTML = `
+      <style>
+        .wheel-container {
+          padding: 1.5rem;
+          background: #000;
+          border-radius: 8px;
+          margin-top: 1.5rem;
+        }
+        .wheel-header {
+          text-align: center;
+          margin-bottom: 1.5rem;
+          color: #999;
+          font-family: 'Source Code Pro', monospace;
+          font-size: 0.9rem;
+          letter-spacing: 0.08em;
+        }
+        .wheel-panel {
+          border-radius: 12px;
+          background: radial-gradient(circle at top, #111 0, #000 70%);
+          border: 1px solid #333;
+          overflow: hidden;
+          box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+        }
+        .wheel-canvas-wrap {
+          position: relative;
+          background: #000;
+          cursor: grab;
+          touch-action: none;
+          width: 100%;
+          height: 380px;
+          display: block;
+        }
+        .wheel-canvas-wrap.dragging {
+          cursor: grabbing;
+        }
+        #wheel-canvas {
+          display: block;
+          width: 100%;
+          height: 100%;
+        }
+        .wheel-hint {
+          position: absolute;
+          bottom: 12px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 11px;
+          color: rgba(150, 160, 180, 0.8);
+          font-family: 'Source Code Pro', monospace;
+          background: rgba(10, 15, 30, 0.9);
+          padding: 4px 10px;
+          border-radius: 999px;
+          border: 1px solid rgba(150, 160, 180, 0.3);
+          pointer-events: none;
+          white-space: nowrap;
+        }
+        .wheel-hud {
+          border-top: 1px solid #333;
+          background: #050a15;
+          padding: 10px 16px;
+          display: grid;
+          grid-template-columns: 1.25fr 1.1fr;
+          gap: 12px;
+          font-family: 'Source Code Pro', monospace;
+          font-size: 12px;
+        }
+        .wheel-hud-left {
+          min-width: 0;
+        }
+        .wheel-hud-right {
+          min-width: 0;
+          text-align: right;
+        }
+        .wheel-label {
+          font-size: 10px;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: #777;
+          margin-bottom: 2px;
+        }
+        .wheel-equation {
+          padding: 4px 8px;
+          border-radius: 6px;
+          border: 1px solid #333;
+          background: #0a0f1a;
+          color: #ddd;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          margin-bottom: 2px;
+          transition: all 140ms ease;
+        }
+        .wheel-equation.active {
+          border-color: #00cc00;
+          background: rgba(0, 204, 0, 0.1);
+          color: #00ff00;
+        }
+        .wheel-total {
+          padding: 4px 8px;
+          border-radius: 6px;
+          border: 1px solid #333;
+          background: #0a0f1a;
+          color: #ddd;
+          display: inline-block;
+          margin-bottom: 2px;
+        }
+        .wheel-progress {
+          font-size: 10px;
+          margin-top: 4px;
+          color: #777;
+        }
+        .wheel-progress span {
+          color: #00ff00;
+        }
+        .wheel-checklist {
+          margin-top: 6px;
+          font-size: 10px;
+          max-height: 60px;
+          overflow-y: auto;
+          max-width: 100%;
+        }
+        .wheel-check-item {
+          white-space: nowrap;
+          color: #888;
+          margin: 2px 0;
+        }
+        .wheel-check-item.done {
+          color: #00ff00;
+        }
+        .wheel-check-item span {
+          margin-right: 3px;
+        }
+      </style>
+      
+      <div class="wheel-container">
+        <div class="wheel-header">
+          ${isPart2 ? 'Part 2: Kinetic Math Wheel' : 'Kinetic Math Wheel'}
+        </div>
+        
+        <div class="wheel-panel">
+          <div class="wheel-canvas-wrap" id="wheel-canvas-wrap">
+            <canvas id="wheel-canvas"></canvas>
+            <div class="wheel-hint">drag to spin · collect all sums</div>
+          </div>
+          
+          <div class="wheel-hud">
+            <div class="wheel-hud-left">
+              <div class="wheel-label">Active problem</div>
+              <div id="wheel-equation" class="wheel-equation">spin the wheel to start</div>
+              <div id="wheel-meta" style="font-size: 10px; color: #666; margin-top: 2px;"></div>
+            </div>
+            <div class="wheel-hud-right">
+              <div class="wheel-label">Grand total</div>
+              <div id="wheel-grand-total" class="wheel-total">0</div>
+              <div id="wheel-progress" class="wheel-progress"></div>
+              <div id="wheel-checklist" class="wheel-checklist"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Initialize Three.js wheel
+    console.log('Wheel HTML rendered, initializing...');
+    initializeWheel(container, data, isPart2);
+  }
+};
+
+function initializeWheel(container, parsed, isPart2) {
+  // Load Three.js if not already loaded
+  if (typeof THREE === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    script.onload = () => {
+      console.log('Three.js loaded successfully');
+      initializeWheelScene(container, parsed, isPart2);
+    };
+    script.onerror = () => {
+      console.error('Failed to load Three.js from CDN');
+      // Try fallback URL
+      const script2 = document.createElement('script');
+      script2.src = 'https://cdn.jsdelivr.net/npm/three@r128/build/three.min.js';
+      script2.onload = () => {
+        console.log('Three.js loaded from fallback CDN');
+        initializeWheelScene(container, parsed, isPart2);
+      };
+      script2.onerror = () => {
+        console.error('All Three.js CDN attempts failed');
+      };
+      document.head.appendChild(script2);
+    };
+    document.head.appendChild(script);
+    return;
+  }
+  
+  initializeWheelScene(container, parsed, isPart2);
+}
+
+function initializeWheelScene(container, parsed, isPart2) {
+  const canvas = document.getElementById('wheel-canvas');
+  if (!canvas) {
+    console.error('Canvas element not found');
+    return;
+  }
+  
+  const wrapper = document.getElementById('wheel-canvas-wrap');
+  if (!wrapper) {
+    console.error('Wrapper element not found');
+    return;
+  }
+  
+  const eqEl = document.getElementById('wheel-equation');
+  const metaEl = document.getElementById('wheel-meta');
+  const totalEl = document.getElementById('wheel-grand-total');
+  const progressEl = document.getElementById('wheel-progress');
+  const checklistEl = document.getElementById('wheel-checklist');
+
+  const grandTotal = parsed.problems.reduce((acc, p) => acc + (p.result ?? 0), 0);
+  totalEl.textContent = grandTotal.toString();
+
+  // Ensure canvas has proper dimensions
+  const rect = wrapper.getBoundingClientRect();
+  let canvasWidth = rect.width;
+  let canvasHeight = rect.height;
+  
+  // Fallback if rect dimensions are 0
+  if (canvasWidth <= 0) canvasWidth = 800;
+  if (canvasHeight <= 0) canvasHeight = 380;
+
+  console.log('Canvas dimensions:', { canvasWidth, canvasHeight, rect });
+
+  // Three.js setup
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, precision: 'highp' });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(canvasWidth, canvasHeight, false);
+  renderer.setClearColor(0x000000);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(38, canvasWidth / canvasHeight, 0.1, 50);
+  camera.position.set(0, 0.4, 8);
+  scene.add(camera);
+  
+  console.log('Scene created, adding light');
+
+  
+  const ambient = new THREE.AmbientLight(0xffffff, 0.9);
+  scene.add(ambient);
+
+  // Grid texture
+  function makeGridTexture(padded, width, height) {
+    const charW = 14;
+    const charH = 20;
+    const marginX = 16;
+    const marginY = 16;
+    const tex = document.createElement('canvas');
+    tex.width = marginX * 2 + width * charW;
+    tex.height = marginY * 2 + height * charH;
+    
+    console.log('Created texture canvas:', { width: tex.width, height: tex.height });
+    
+    const ctx = tex.getContext('2d', { willReadFrequently: true });
+    if (!ctx) {
+      console.error('Failed to get 2D context');
+      return null;
+    }
+    
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, tex.width, tex.height);
+    ctx.font = '16px JetBrains Mono, Fira Code, monospace';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = '#777777';
+    for (let r = 0; r < height; r++) {
+      for (let c = 0; c < width; c++) {
+        const ch = padded[r][c];
+        const x = marginX + c * charW;
+        const y = marginY + r * charH;
+        ctx.fillText(ch, x, y);
+      }
+    }
+    
+    console.log('Texture canvas drawn, creating THREE.CanvasTexture');
+    
+    const texture = new THREE.CanvasTexture(tex);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
+    texture.generateMipmaps = false;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    
+    console.log('THREE.CanvasTexture created:', texture);
+    return texture;
+  }
+
+  const gridTexture = makeGridTexture(parsed.padded, parsed.width, parsed.height);
+  if (!gridTexture) {
+    console.error('Failed to create grid texture');
+    return;
+  }
+  console.log('Grid texture created:', gridTexture);
+
+  // Wheel geometry
+  const radius = 3.5;
+  const cylHeight = 2.2;
+  const radialSegments = parsed.width;
+  const geometry = new THREE.CylinderGeometry(radius, radius, cylHeight, radialSegments, 1, true);
+  const material = new THREE.MeshBasicMaterial({ map: gridTexture, side: THREE.DoubleSide, color: 0xffffff });
+  console.log('Material created:', material);
+  const wheel = new THREE.Mesh(geometry, material);
+  scene.add(wheel);
+  wheel.rotation.y = Math.PI;
+  
+  console.log('Wheel mesh created and added to scene');
+
+  // State
+  let rotation = 0;
+  let velocity = 0;
+  let lastX = 0;
+  let isDragging = false;
+  const problems = parsed.problems.map(p => ({ ...p, solved: false }));
+
+  // Calculate which problem is at front
+  function getActiveProblem() {
+    const anglePerProblem = (2 * Math.PI) / parsed.width;
+    let normalized = ((rotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    let idx = Math.round(normalized / anglePerProblem) % parsed.width;
+    for (let p of problems) {
+      if (p.startCol <= idx && idx <= p.endCol) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  // Update HUD
+  function updateHUD() {
+    const active = getActiveProblem();
+    if (active) {
+      eqEl.className = 'wheel-equation active';
+      eqEl.textContent = `${active.numbers.join(` ${active.op} `)} = ${active.result}`;
+      metaEl.textContent = `Problem ${active.id}`;
+      
+      if (!active.solved) {
+        active.solved = true;
+      }
+    } else {
+      eqEl.className = 'wheel-equation';
+      eqEl.textContent = 'spin to reveal';
+    }
+
+    checklistEl.innerHTML = '';
+    problems.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'wheel-check-item' + (p.solved ? ' done' : '');
+      row.innerHTML = `<span>${p.solved ? '■' : '□'}</span> P${p.id}`;
+      checklistEl.appendChild(row);
+    });
+
+    const solvedCount = problems.filter(p => p.solved).length;
+    progressEl.innerHTML = `Solved <span>${solvedCount}</span> / ${problems.length}`;
+  }
+
+  // Interaction
+  function onMouseDown(e) {
+    isDragging = true;
+    lastX = e.clientX || e.touches?.[0].clientX || 0;
+    wrapper.classList.add('dragging');
+  }
+
+  function onMouseMove(e) {
+    if (!isDragging) return;
+    const x = e.clientX || e.touches?.[0].clientX || 0;
+    const delta = x - lastX;
+    velocity = delta * 0.05;
+    rotation += velocity;
+    wheel.rotation.y = Math.PI + rotation;
+    lastX = x;
+    updateHUD();
+  }
+
+  function onMouseUp() {
+    isDragging = false;
+    wrapper.classList.remove('dragging');
+  }
+
+  wrapper.addEventListener('mousedown', onMouseDown);
+  wrapper.addEventListener('touchstart', onMouseDown);
+  window.addEventListener('mousemove', onMouseMove);
+  window.addEventListener('touchmove', onMouseMove);
+  window.addEventListener('mouseup', onMouseUp);
+  window.addEventListener('touchend', onMouseUp);
+
+  // Physics loop
+  function animate() {
+    requestAnimationFrame(animate);
+    
+    if (!isDragging && Math.abs(velocity) > 0.001) {
+      velocity *= 0.96;
+      rotation += velocity;
+      wheel.rotation.y = Math.PI + rotation;
+      updateHUD();
+    }
+
+    renderer.render(scene, camera);
+  }    console.log('Starting animation loop');
+    animate();
+    updateHUD();
+
+    // Handle resize
+    function onWindowResize() {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h, false);
+    }
+
+    window.addEventListener('resize', onWindowResize);
+}
