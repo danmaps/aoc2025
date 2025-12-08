@@ -150,13 +150,28 @@ export default {
           <textarea 
             id="day08-input" 
             style="width: 100%; min-height: 120px; background: #0a0a0a; color: #00cc00; border: 1px solid #333; padding: 0.75rem; font-family: 'Source Code Pro', monospace; font-size: 12px; resize: vertical;"
-            placeholder="162,817,812
+          >162,817,812
 57,618,57
 906,360,560
-..."
-          ></textarea>
+592,479,940
+352,342,300
+466,668,158
+542,29,236
+431,825,988
+739,650,466
+52,470,668
+216,146,977
+819,987,18
+117,168,530
+805,96,715
+346,949,466
+970,615,88
+941,993,340
+862,61,35
+984,92,344
+425,690,689</textarea>
           <div style="margin-top: 0.5rem;">
-            <button id="day08-visualize" class="btn" style="margin-right: 0.5rem;">[Launch 3D Playground]</button>
+            <button id="day08-visualize" class="btn" style="margin-right: 0.5rem;">[Launch 3D]</button>
             <button id="day08-solve" class="btn">[Solve]</button>
           </div>
         </div>
@@ -173,6 +188,11 @@ export default {
     const solveBtn = document.getElementById('day08-solve');
     const solutionEl = document.getElementById('day08-solution');
     const containerEl = document.getElementById('day08-3d-container');
+
+    // Auto-visualize sample input on load
+    setTimeout(() => {
+      if (visualizeBtn) visualizeBtn.click();
+    }, 100);
 
     solveBtn?.addEventListener('click', () => {
       const input = inputEl.value.trim();
@@ -232,47 +252,10 @@ Continue until all boxes form a single circuit...
         // Show container
         containerEl.style.display = 'block';
         containerEl.innerHTML = `
-          <div style="margin-top: 1.5rem; border-top: 1px solid #333; padding-top: 1.5rem;">
-            <h3 style="color: #00cc00;">3D Circuit Playground</h3>
+          <div style="margin-top: 1.5rem; border-top: 1px solid #333; padding-top: 1.5rem; max-width: 800px;">
+            <h3 style="color: #00cc00; margin-bottom: 1rem;">3d-force-graph Visualization</h3>
             
-            <div id="day08-viz-controls" style="margin: 1rem 0; padding: 1rem; background: #0a0a0a; border: 1px solid #333;">
-              <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
-                <button id="day08-play" class="btn">[Play Part 1]</button>
-                <button id="day08-play-p2" class="btn">[Play Part 2]</button>
-                <button id="day08-pause" class="btn" disabled>[Pause]</button>
-                <button id="day08-reset" class="btn">[Reset]</button>
-                <button id="day08-toggle-mode" class="btn">[Toggle Mode]</button>
-              </div>
-              
-              <div style="margin-bottom: 1rem;">
-                <label style="color: #00cc00;">Step: <span id="day08-step-label">0</span> / <span id="day08-max-steps">1000</span></label>
-                <input 
-                  id="day08-step-slider" 
-                  type="range" 
-                  min="0" 
-                  max="1000" 
-                  value="0" 
-                  style="width: 100%; accent-color: #00cc00;"
-                />
-              </div>
-              
-              <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; color: #cccccc; font-size: 0.9rem;">
-                <div>
-                  <div>Links: <span id="day08-links-count" style="color: #ffff66;">0</span></div>
-                  <div>Circuits: <span id="day08-circuits-count" style="color: #ffff66;">0</span></div>
-                </div>
-                <div>
-                  <div>Largest 3 circuits:</div>
-                  <div style="color: #ffff66; font-family: monospace;" id="day08-top3">-</div>
-                </div>
-                <div>
-                  <div>Product:</div>
-                  <div style="color: #ffff66; font-size: 1.3rem; font-weight: bold;" id="day08-product">-</div>
-                </div>
-              </div>
-            </div>
-
-            <div id="day08-3d-graph" style="width: 100%; height: 600px; background: #0a0a0a; border: 1px solid #333; position: relative;">
+            <div id="day08-3d-graph" style="width: 600px; height: 400px; background: #0a0a0a; border: 1px solid #333; position: relative; margin: 0 auto 1.5rem; overflow: hidden;">
               <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00cc00; text-align: center;">
                 <div style="font-size: 1.2rem; margin-bottom: 1rem;">Loading 3D Force Graph...</div>
                 <div style="font-size: 0.9rem; color: #888;">This requires the 3d-force-graph library</div>
@@ -281,15 +264,74 @@ Continue until all boxes form a single circuit...
                 </div>
               </div>
             </div>
-            
-            <div style="margin-top: 1rem; padding: 1rem; background: #0a0a0a; border: 1px solid #333; font-size: 0.9rem; color: #888;">
-              <strong style="color: #00cc00;">Instructions:</strong>
-              <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
-                <li>Use mouse to rotate, scroll to zoom</li>
-                <li>Play to animate connections in shortest-first order</li>
-                <li>Toggle Mode switches between fixed coordinates and force-directed layout</li>
-                <li>Hero colors (gold, cyan, magenta) mark the three largest circuits</li>
-              </ul>
+              
+            <div style="display: flex; flex-direction: column; gap: 1rem; max-width: 800px;">
+                <div id="day08-viz-controls" style="padding: 1rem; background: #0a0a0a; border: 1px solid #333;">
+                  <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+                    <button id="day08-play" class="btn">[Play Part 1]</button>
+                    <button id="day08-play-p2" class="btn">[Play Part 2]</button>
+                    <button id="day08-pause" class="btn" disabled>[Pause]</button>
+                    <button id="day08-reset" class="btn">[Reset]</button>
+                    <button id="day08-toggle-mode" class="btn">[Toggle Mode]</button>
+                  </div>
+                  
+                  <div style="margin-bottom: 1rem;">
+                    <label style="color: #00cc00; font-size: 0.9rem;">Step: <span id="day08-step-label">0</span> / <span id="day08-max-steps">1000</span></label>
+                    <input 
+                      id="day08-step-slider" 
+                      type="range" 
+                      min="0" 
+                      max="1000" 
+                      value="0" 
+                      style="width: 100%; accent-color: #00cc00;"
+                    />
+                  </div>
+                  
+                  <div style="display: flex; flex-direction: column; gap: 0.75rem; color: #cccccc; font-size: 0.9rem;">
+                    <div>
+                      <div>Links: <span id="day08-links-count" style="color: #ffff66;">0</span></div>
+                      <div>Circuits: <span id="day08-circuits-count" style="color: #ffff66;">0</span></div>
+                    </div>
+                    <div>
+                      <div>Largest 3 circuits:</div>
+                      <div style="color: #ffff66; font-family: monospace;" id="day08-top3">-</div>
+                    </div>
+                    <div>
+                      <div>Product:</div>
+                      <div style="color: #ffff66; font-size: 1.3rem; font-weight: bold;" id="day08-product">-</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div style="padding: 1rem; background: #0a0a0a; border: 1px solid #333; font-size: 0.85rem; color: #888;">
+                  <strong style="color: #00cc00;">Instructions:</strong>
+                  <ul style="margin: 0.5rem 0; padding-left: 1.5rem; line-height: 1.5;">
+                    <li>Scroll to zoom</li>
+                    <li>Play to animate connections</li>
+                    <li>Toggle Mode: fixed vs force-directed</li>
+                    <li>Hero colors mark top 3 circuits</li>
+                  </ul>
+                </div>
+
+                <div style="padding: 1rem; background: #0a0a0a; border: 1px solid #333; font-size: 0.85rem;">
+                  <strong style="color: #00cc00;">How This Works</strong>
+                  <div style="margin-top: 0.5rem; color: #cccccc; line-height: 1.5;">
+                    <p style="margin: 0.5rem 0; font-size: 0.85rem;">
+                      Uses a <strong>greedy algorithm</strong>:
+                    </p>
+                    <ol style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.85rem;">
+                      <li>Calculate all pairwise distances</li>
+                      <li>Sort by distance (shortest first)</li>
+                      <li>Connect pairs, build circuits</li>
+                      <li>Track with <a href="https://en.wikipedia.org/wiki/Disjoint-set_data_structure" target="_blank" style="color: #009900;">Union-Find</a></li>
+                    </ol>
+                    <p style="margin: 0.5rem 0; color: #888; font-size: 0.8rem;">
+                      <strong>Part 1:</strong> Product of top 3 circuits after 1000 connections<br>
+                      <strong>Part 2:</strong> X-coordinates product of final unifying connection
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         `;
@@ -313,20 +355,13 @@ async function load3DForceGraph() {
   if (window.ForceGraph3D) return;
 
   return new Promise((resolve, reject) => {
-    // Load Three.js first
-    const three = document.createElement('script');
-    three.src = 'https://unpkg.com/three@0.160.0/build/three.module.js';
-    three.type = 'module';
-    three.onerror = () => reject(new Error('Failed to load Three.js'));
-    
-    // Load 3d-force-graph
+    // Load 3d-force-graph (includes Three.js)
     const script = document.createElement('script');
     script.src = 'https://unpkg.com/3d-force-graph@1.73.3/dist/3d-force-graph.min.js';
     script.onload = () => resolve();
     script.onerror = () => reject(new Error('Failed to load 3d-force-graph'));
     
-    document.head.appendChild(three);
-    setTimeout(() => document.head.appendChild(script), 100);
+    document.head.appendChild(script);
   });
 }
 
@@ -338,16 +373,26 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
     return;
   }
 
-  // Scale coordinates to reasonable range
+  // Scale coordinates to reasonable range and center them
   const coords = nodes.flatMap(n => [n.x, n.y, n.z]);
-  const minCoord = Math.min(...coords);
-  const maxCoord = Math.max(...coords);
-  const scale = 400 / (maxCoord - minCoord);
+  const minX = Math.min(...nodes.map(n => n.x));
+  const maxX = Math.max(...nodes.map(n => n.x));
+  const minY = Math.min(...nodes.map(n => n.y));
+  const maxY = Math.max(...nodes.map(n => n.y));
+  const minZ = Math.min(...nodes.map(n => n.z));
+  const maxZ = Math.max(...nodes.map(n => n.z));
+  
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const centerZ = (minZ + maxZ) / 2;
+  
+  const maxRange = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+  const scale = 300 / maxRange;
 
   nodes.forEach(n => {
-    n.fx = (n.x - minCoord) * scale - 200;
-    n.fy = (n.y - minCoord) * scale - 200;
-    n.fz = (n.z - minCoord) * scale - 200;
+    n.fx = (n.x - centerX) * scale;
+    n.fy = (n.y - centerY) * scale;
+    n.fz = (n.z - centerZ) * scale;
     n.originalX = n.fx;
     n.originalY = n.fy;
     n.originalZ = n.fz;
@@ -358,7 +403,9 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
 
   // Create graph
   const Graph = ForceGraph3D()(graphEl)
-    .graphData({ nodes: [], links: [] })
+    .width(600)
+    .height(400)
+    .graphData({ nodes, links: [] })
     .nodeRelSize(4)
     .nodeColor(node => node.color || '#555577')
     .linkWidth(0.5)
@@ -367,17 +414,30 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
     .linkDirectionalParticleSpeed(0.005)
     .linkColor(link => link.color || 'rgba(255,255,255,0.3)')
     .backgroundColor('#0a0a0a')
-    .d3VelocityDecay(1); // Freeze nodes since we use fx/fy/fz
+    .d3VelocityDecay(1)
+    .enableNodeDrag(false)
+    .enableNavigationControls(false);
+
+  // Set initial camera position and lookAt origin
+  Graph.cameraPosition(
+    { x: 600, y: 300, z: 600 },  // camera position
+    { x: 0, y: 0, z: 0 },         // lookAt position (origin)
+    1000                          // transition duration
+  );
 
   // Auto-rotation
   let angle = 0;
   setInterval(() => {
     angle += 0.3;
     const distance = 600;
-    Graph.cameraPosition({
-      x: distance * Math.sin(angle * Math.PI / 180),
-      z: distance * Math.cos(angle * Math.PI / 180)
-    });
+    Graph.cameraPosition(
+      {
+        x: distance * Math.sin(angle * Math.PI / 180),
+        y: distance * 0.3,
+        z: distance * Math.cos(angle * Math.PI / 180)
+      },
+      { x: 0, y: 0, z: 0 }  // always look at origin
+    );
   }, 50);
 
   // State
@@ -409,14 +469,14 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
     const state = currentStates[k];
     
     // Update UI
-    stepSlider.value = k;
-    stepLabel.textContent = k;
-    linksCountEl.textContent = k;
-    circuitsCountEl.textContent = state.numCircuits;
+    if (stepSlider) stepSlider.value = k;
+    if (stepLabel) stepLabel.textContent = k;
+    if (linksCountEl) linksCountEl.textContent = k;
+    if (circuitsCountEl) circuitsCountEl.textContent = state.numCircuits;
     
     const top3 = state.components.slice(0, 3).map(c => c.size);
-    top3El.textContent = top3.join(', ');
-    productEl.textContent = state.product;
+    if (top3El) top3El.textContent = top3.join(', ');
+    if (productEl) productEl.textContent = state.product;
 
     // Build node metadata
     const nodeMeta = new Map();
@@ -453,7 +513,10 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
     });
 
     // Update graph
-    Graph.graphData({ nodes, links: displayLinks });
+    Graph.graphData({ 
+      nodes, 
+      links: displayLinks 
+    });
   }
 
   // Play animation
@@ -464,8 +527,8 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
     currentStates = part2 ? statesP2 : statesP1;
     const maxSteps = part2 ? part2Info.step : 1000;
     
-    stepSlider.max = maxSteps;
-    maxStepsLabel.textContent = maxSteps;
+    if (stepSlider) stepSlider.max = maxSteps;
+    if (maxStepsLabel) maxStepsLabel.textContent = maxSteps;
     
     isPlaying = true;
     playBtn.disabled = true;
