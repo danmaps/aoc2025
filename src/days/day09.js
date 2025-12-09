@@ -1,3 +1,12 @@
+const SAMPLE_INPUT = `7,1
+11,1
+11,7
+9,7
+9,5
+2,5
+2,3
+7,3`;
+
 export default {
   title: 'Day 9: Movie Theater',
   description: 'Largest rectangles anchored on red tiles.',
@@ -17,7 +26,7 @@ export default {
           <textarea 
             id="day09-input" 
             style="width: 100%; min-height: 150px; background: #0a0a0a; color: #00cc00; border: 1px solid #333; padding: 0.75rem; font-family: 'Source Code Pro', monospace; font-size: 12px; resize: vertical;"
-          ></textarea>
+          >${SAMPLE_INPUT}</textarea>
           <div style="margin-top: 0.5rem;">
             <button id="day09-visualize" class="btn" style="margin-right: 0.5rem;">[Visualize]</button>
             <button id="day09-reveal" class="btn" style="margin-right: 0.5rem;">[Reveal Solution]</button>
@@ -36,7 +45,8 @@ export default {
     const resultsEl = document.getElementById('day09-results');
     const vizWrapper = document.getElementById('day09-viz-wrapper');
 
-    // Parse "x,y" lines into point objects, preserving order
+    const MAX_GRID_CELLS = 1_000_000; // safety cap for phones
+
     function parseTiles(text) {
       return text
         .split('\n')
@@ -44,11 +54,13 @@ export default {
         .filter(line => line.length > 0)
         .map(line => {
           const [x, y] = line.split(',').map(Number);
+          if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            throw new Error(`Bad line: "${line}", expected "x,y"`);
+          }
           return { x, y };
         });
     }
 
-    // Part 1: area of rectangle between two red tiles (axis-aligned, inclusive grid cells)
     function rectArea(a, b) {
       return (Math.abs(a.x - b.x) + 1) * (Math.abs(a.y - b.y) + 1);
     }
@@ -73,10 +85,12 @@ export default {
       return { max, a: bestA, b: bestB };
     }
 
-    // Build the red+green region for part 2:
-    // - Border: connect consecutive red tiles (wrapping) with straight segments
-    // - Interior: everything inside the loop
-    function buildRegion(tiles) {
+    // Build red+green region safely
+    function safeBuildRegion(tiles) {
+      if (!tiles.length) {
+        return { ok: false, reason: 'No tiles.' };
+      }
+
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       for (const t of tiles) {
         if (t.x < minX) minX = t.x;
@@ -88,10 +102,21 @@ export default {
       const width = maxX - minX + 1;
       const height = maxY - minY + 1;
 
+      if (width <= 0 || height <= 0) {
+        return { ok: false, reason: 'Degenerate extent.' };
+      }
+
+      const cells = width * height;
+      if (cells > MAX_GRID_CELLS) {
+        return {
+          ok: false,
+          reason: `Grid too large to visualize safely in-browser (${cells} cells).`
+        };
+      }
+
       const toGX = x => x - minX;
       const toGY = y => y - minY;
 
-      // border[y][x] is true for tiles on the red+green loop
       const border = Array.from({ length: height }, () =>
         Array(width).fill(false)
       );
@@ -99,7 +124,7 @@ export default {
       const n = tiles.length;
       for (let i = 0; i < n; i++) {
         const a = tiles[i];
-        const b = tiles[(i + 1) % n]; // wrap
+        const b = tiles[(i + 1) % n];
 
         if (a.x === b.x) {
           const x = toGX(a.x);
@@ -116,11 +141,13 @@ export default {
             border[y][toGX(x)] = true;
           }
         } else {
-          throw new Error('Non axis aligned segment');
+          return {
+            ok: false,
+            reason: `Found non-axis-aligned segment between (${a.x},${a.y}) and (${b.x},${b.y}).`
+          };
         }
       }
 
-      // Flood fill outside to find exterior cells
       const H = height;
       const W = width;
       const visited = Array.from({ length: H + 2 }, () =>
@@ -143,8 +170,9 @@ export default {
         [0, -1]
       ];
 
-      while (queue.length) {
-        const [cx, cy] = queue.shift();
+      let qi = 0;
+      while (qi < queue.length) {
+        const [cx, cy] = queue[qi++];
         for (const [dx, dy] of dirs) {
           const nx = cx + dx;
           const ny = cy + dy;
@@ -159,7 +187,6 @@ export default {
         }
       }
 
-      // allowed[y][x] is true for red/green cells (border + interior)
       const allowed = Array.from({ length: H }, () =>
         Array(W).fill(false)
       );
@@ -179,7 +206,6 @@ export default {
         }
       }
 
-      // prefix sums over allowed
       const prefix = Array.from({ length: H + 1 }, () =>
         Array(W + 1).fill(0)
       );
@@ -213,20 +239,30 @@ export default {
       }
 
       return {
-        minX,
-        minY,
-        width,
-        height,
-        border,
-        allowed,
-        countAllowed
+        ok: true,
+        region: {
+          minX,
+          minY,
+          width,
+          height,
+          border,
+          allowed,
+          countAllowed
+        }
       };
     }
 
     function solvePart2(tiles) {
-      if (tiles.length < 2) return { max: 0, a: null, b: null, rects: [] };
+      if (tiles.length < 2) {
+        return { max: 0, a: null, b: null, rects: [], region: null, error: 'Need at least two tiles.' };
+      }
 
-      const region = buildRegion(tiles);
+      const built = safeBuildRegion(tiles);
+      if (!built.ok) {
+        return { max: 0, a: null, b: null, rects: [], region: null, error: built.reason };
+      }
+
+      const region = built.region;
       const { countAllowed } = region;
 
       let max = 0;
@@ -257,10 +293,9 @@ export default {
         }
       }
 
-      // sort valid rects by area descending
       validRects.sort((r1, r2) => r2.area - r1.area);
 
-      return { max, a: bestA, b: bestB, rects: validRects, region };
+      return { max, a: bestA, b: bestB, rects: validRects, region, error: null };
     }
 
     function drawVisualization(region, tiles, rects, rectIndex) {
@@ -278,23 +313,18 @@ export default {
 
       const { minX, minY, width, height, border, allowed } = region;
 
-      // pick a cell size that keeps things reasonably sized
       const maxCanvasSize = 500;
-      const cellSize = Math.floor(
-        Math.max(8, Math.min(maxCanvasSize / width, maxCanvasSize / height))
-      );
+      const raw = Math.min(maxCanvasSize / width, maxCanvasSize / height);
+      const cellSize = Math.max(4, Math.floor(raw));
 
-      canvas.width = width * cellSize;
-      canvas.height = height * cellSize;
+      canvas.width = Math.max(1, width * cellSize);
+      canvas.height = Math.max(1, height * cellSize);
 
-      // quick lookup for red tiles
       const redSet = new Set(tiles.map(t => `${t.x},${t.y}`));
 
-      // fill background
       ctx.fillStyle = '#050505';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // draw grid cells
       for (let gy = 0; gy < height; gy++) {
         for (let gx = 0; gx < width; gx++) {
           const screenX = gx * cellSize;
@@ -307,20 +337,19 @@ export default {
           const isAllowed = allowed[gy][gx];
 
           if (!isAllowed) {
-            ctx.fillStyle = '#111111'; // outside region
+            ctx.fillStyle = '#111111';
           } else if (isRed) {
-            ctx.fillStyle = '#cc3333'; // red tile
+            ctx.fillStyle = '#cc3333';
           } else if (isBorder) {
-            ctx.fillStyle = '#33ff66'; // loop border (green)
+            ctx.fillStyle = '#33ff66';
           } else {
-            ctx.fillStyle = '#114422'; // interior green
+            ctx.fillStyle = '#114422';
           }
 
           ctx.fillRect(screenX, screenY, cellSize, cellSize);
         }
       }
 
-      // highlight current rectangle if any
       if (rects.length > 0 && rectIndex >= 0 && rectIndex < rects.length) {
         const rect = rects[rectIndex];
         const { a, b } = rect;
@@ -345,7 +374,6 @@ export default {
         ctx.strokeRect(gx1 + 1, gy1 + 1, gx2 - gx1 - 2, gy2 - gy1 - 2);
       }
 
-      // update rect info
       const info = document.getElementById('day09-rect-info');
       if (rects.length === 0) {
         info.textContent = 'No valid red/green rectangles found.';
@@ -354,49 +382,48 @@ export default {
         info.textContent = `Rectangle ${rectIndex + 1} of ${rects.length} • area ${r.area} • corners (${r.a.x},${r.a.y}) to (${r.b.x},${r.b.y})`;
       }
 
-      // hook up nav buttons
       const prevBtn = document.getElementById('day09-prev-rect');
       const nextBtn = document.getElementById('day09-next-rect');
 
-      prevBtn.addEventListener('click', () => {
-        if (rects.length === 0) return;
+      prevBtn.onclick = () => {
+        if (!rects.length) return;
         const newIndex = (rectIndex - 1 + rects.length) % rects.length;
         drawVisualization(region, tiles, rects, newIndex);
-      });
+      };
 
-      nextBtn.addEventListener('click', () => {
-        if (rects.length === 0) return;
+      nextBtn.onclick = () => {
+        if (!rects.length) return;
         const newIndex = (rectIndex + 1) % rects.length;
         drawVisualization(region, tiles, rects, newIndex);
-      });
+      };
+    }
+
+    function runVisualizationFromTextarea() {
+      const input = inputEl.value.trim();
+      if (!input) {
+        vizWrapper.innerHTML = '';
+        return;
+      }
+
+      try {
+        const tiles = parseTiles(input);
+        const p2 = solvePart2(tiles);
+
+        if (p2.error) {
+          vizWrapper.innerHTML = `<p style="color:#ff6666;">Cannot visualize Part 2: ${p2.error}</p>`;
+          return;
+        }
+
+        drawVisualization(p2.region, tiles, p2.rects, 0);
+        resultsEl.innerHTML = '<p style="color:#cccccc;">Use the buttons to cycle through valid part 2 rectangles.</p>';
+      } catch (err) {
+        console.error(err);
+        vizWrapper.innerHTML = `<p style="color:#ff6666;">Visualization error: ${(err && err.message) || err}</p>`;
+      }
     }
 
     visualizeBtn.addEventListener('click', () => {
-      const input = inputEl.value.trim();
-      if (!input) {
-        resultsEl.innerHTML = '<p style="color:orange;">Please paste puzzle input first.</p>';
-        vizWrapper.innerHTML = '';
-        return;
-      }
-
-      let tiles;
-      try {
-        tiles = parseTiles(input);
-      } catch (e) {
-        resultsEl.innerHTML = '<p style="color:#ff6666;">Error parsing input. Make sure each line is "x,y".</p>';
-        vizWrapper.innerHTML = '';
-        return;
-      }
-
-      const p2 = solvePart2(tiles);
-
-      if (!p2.region) {
-        vizWrapper.innerHTML = '<p style="color:#ff6666;">Could not build red/green region.</p>';
-        return;
-      }
-
-      drawVisualization(p2.region, tiles, p2.rects, 0);
-      resultsEl.innerHTML = '<p style="color:#cccccc;">Use the buttons to cycle through valid part 2 rectangles.</p>';
+      runVisualizationFromTextarea();
     });
 
     revealBtn.addEventListener('click', () => {
@@ -406,55 +433,56 @@ export default {
         return;
       }
 
-      let tiles;
       try {
-        tiles = parseTiles(input);
-      } catch (e) {
-        resultsEl.innerHTML = '<p style="color:#ff6666;">Error parsing input. Make sure each line is "x,y".</p>';
-        return;
+        const tiles = parseTiles(input);
+        if (tiles.length < 2) {
+          resultsEl.innerHTML = '<p style="color:#ff6666;">Need at least two red tiles.</p>';
+          return;
+        }
+
+        const p1 = solvePart1(tiles);
+        const p2 = solvePart2(tiles);
+
+        let html = '';
+
+        if (p1.max === 0 || !p1.a || !p1.b) {
+          html += '<p style="color:#ff6666;">Part 1: No valid rectangles found.</p>';
+        } else {
+          html += `
+            <p style="color:#cccccc;">
+              <strong>Part 1:</strong> Largest rectangle (no restrictions) area:
+              <span style="color:#00ff00;">${p1.max}</span><br/>
+              Opposite corners at:
+              (<span style="color:#00ccff;">${p1.a.x}</span>, <span style="color:#00ccff;">${p1.a.y}</span>) and
+              (<span style="color:#00ccff;">${p1.b.x}</span>, <span style="color:#00ccff;">${p1.b.y}</span>)
+            </p>
+          `;
+        }
+
+        if (p2.error) {
+          html += `<p style="color:#ff6666;"><strong>Part 2:</strong> ${p2.error}</p>`;
+        } else if (p2.max === 0 || !p2.a || !p2.b) {
+          html += '<p style="color:#ff6666;"><strong>Part 2:</strong> No rectangle fits entirely within red+green tiles.</p>';
+        } else {
+          html += `
+            <p style="color:#cccccc;">
+              <strong>Part 2:</strong> Largest rectangle using only red/green tiles area:
+              <span style="color:#00ff00;">${p2.max}</span><br/>
+              Opposite corners at:
+              (<span style="color:#00ccff;">${p2.a.x}</span>, <span style="color:#00ccff;">${p2.a.y}</span>) and
+              (<span style="color:#00ccff;">${p2.b.x}</span>, <span style="color:#00ccff;">${p2.b.y}</span>)
+            </p>
+          `;
+        }
+
+        resultsEl.innerHTML = html;
+      } catch (err) {
+        console.error(err);
+        resultsEl.innerHTML = `<p style="color:#ff6666;">Solve error: ${(err && err.message) || err}</p>`;
       }
-
-      if (tiles.length < 2) {
-        resultsEl.innerHTML = '<p style="color:#ff6666;">Need at least two red tiles.</p>';
-        return;
-      }
-
-      const p1 = solvePart1(tiles);
-      const p2 = solvePart2(tiles);
-
-      let html = '';
-
-      // Part 1
-      if (p1.max === 0 || !p1.a || !p1.b) {
-        html += '<p style="color:#ff6666;">Part 1: No valid rectangles found.</p>';
-      } else {
-        html += `
-          <p style="color:#cccccc;">
-            <strong>Part 1:</strong> Largest rectangle (no restrictions) area:
-            <span style="color:#00ff00;">${p1.max}</span><br/>
-            Opposite corners at:
-            (<span style="color:#00ccff;">${p1.a.x}</span>, <span style="color:#00ccff;">${p1.a.y}</span>) and
-            (<span style="color:#00ccff;">${p1.b.x}</span>, <span style="color:#00ccff;">${p1.b.y}</span>)
-          </p>
-        `;
-      }
-
-      // Part 2
-      if (p2.max === 0 || !p2.a || !p2.b) {
-        html += '<p style="color:#ff6666;"><strong>Part 2:</strong> No rectangle fits entirely within red+green tiles.</p>';
-      } else {
-        html += `
-          <p style="color:#cccccc;">
-            <strong>Part 2:</strong> Largest rectangle using only red/green tiles area:
-            <span style="color:#00ff00;">${p2.max}</span><br/>
-            Opposite corners at:
-            (<span style="color:#00ccff;">${p2.a.x}</span>, <span style="color:#00ccff;">${p2.a.y}</span>) and
-            (<span style="color:#00ccff;">${p2.b.x}</span>, <span style="color:#00ccff;">${p2.b.y}</span>)
-          </p>
-        `;
-      }
-
-      resultsEl.innerHTML = html;
     });
+
+    // Auto-visualize the sample input on load
+    runVisualizationFromTextarea();
   }
 };
