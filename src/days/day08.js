@@ -396,6 +396,7 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
     n.originalX = n.fx;
     n.originalY = n.fy;
     n.originalZ = n.fz;
+    n.color = '#555577';  // Set default gray color initially
   });
 
   // Hero colors for top 3 circuits
@@ -418,18 +419,23 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
     .enableNodeDrag(false)
     .enableNavigationControls(false);
 
-  // Set initial camera position and lookAt origin
+  // Set initial camera position and lookAt origin (no transition)
+  const startAngle = 45;
+  const distance = 600;
   Graph.cameraPosition(
-    { x: 600, y: 300, z: 600 },  // camera position
-    { x: 0, y: 0, z: 0 },         // lookAt position (origin)
-    1000                          // transition duration
+    { 
+      x: distance * Math.sin(startAngle * Math.PI / 180), 
+      y: distance * 0.3, 
+      z: distance * Math.cos(startAngle * Math.PI / 180) 
+    },
+    { x: 0, y: 0, z: 0 },
+    0  // no transition
   );
 
   // Auto-rotation
-  let angle = 0;
+  let angle = startAngle;
   setInterval(() => {
     angle += 0.3;
-    const distance = 600;
     Graph.cameraPosition(
       {
         x: distance * Math.sin(angle * Math.PI / 180),
@@ -595,8 +601,7 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
     applyStep(parseInt(e.target.value));
   });
 
-  // Initialize at step 0
-  applyStep(0);
+  // Don't initialize at step 0 - just show the nodes with no colors or connections
 
   // Cleanup on navigation
   window.addEventListener('hashchange', () => {
