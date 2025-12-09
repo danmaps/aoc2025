@@ -1,9 +1,3 @@
-Oh this is a fun part 2 constraint.
-
-Below is your module updated to:
-	•	Keep part 1 (unrestricted rectangle)
-	•	Add part 2 (rectangle must be fully inside the red+green loop)
-	•	Show both answers when you click [Reveal Solution]
 
 export default {
   title: 'Day 9: Movie Theater',
