@@ -10,7 +10,7 @@ export default {
         <div style="margin-bottom: 1rem;">
           <a href="https://adventofcode.com/2025/day/9" target="_blank" style="color: #009900;">[View Puzzle]</a>
         </div>
-        <p>Paste your list of red tile coordinates (x,y per line) and reveal the largest rectangles.</p>
+        <p>Paste your list of red tile coordinates (x,y per line) and explore the rectangles.</p>
         
         <div style="margin: 1rem 0;">
           <label style="color: #00cc00; display: block; margin-bottom: 0.5rem;">&gt; Paste your puzzle input:</label>
@@ -24,6 +24,7 @@ export default {
           </div>
         </div>
 
+        <div id="day09-viz-wrapper" style="margin-top:1rem;"></div>
         <div id="day09-results" style="margin-top:1rem;"></div>
       </div>
     `;
@@ -33,6 +34,7 @@ export default {
     const visualizeBtn = document.getElementById('day09-visualize');
     const revealBtn = document.getElementById('day09-reveal');
     const resultsEl = document.getElementById('day09-results');
+    const vizWrapper = document.getElementById('day09-viz-wrapper');
 
     // Parse "x,y" lines into point objects, preserving order
     function parseTiles(text) {
@@ -74,8 +76,7 @@ export default {
     // Build the red+green region for part 2:
     // - Border: connect consecutive red tiles (wrapping) with straight segments
     // - Interior: everything inside the loop
-    function buildAllowedGrid(tiles) {
-      // Compute extent
+    function buildRegion(tiles) {
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       for (const t of tiles) {
         if (t.x < minX) minX = t.x;
@@ -87,11 +88,10 @@ export default {
       const width = maxX - minX + 1;
       const height = maxY - minY + 1;
 
-      // Helper to map world coords -> grid indices
       const toGX = x => x - minX;
       const toGY = y => y - minY;
 
-      // Border cells (loop of red+green around the shape)
+      // border[y][x] is true for tiles on the red+green loop
       const border = Array.from({ length: height }, () =>
         Array(width).fill(false)
       );
@@ -102,7 +102,6 @@ export default {
         const b = tiles[(i + 1) % n]; // wrap
 
         if (a.x === b.x) {
-          // Vertical segment
           const x = toGX(a.x);
           const y1 = Math.min(a.y, b.y);
           const y2 = Math.max(a.y, b.y);
@@ -110,7 +109,6 @@ export default {
             border[toGY(y)][x] = true;
           }
         } else if (a.y === b.y) {
-          // Horizontal segment
           const y = toGY(a.y);
           const x1 = Math.min(a.x, b.x);
           const x2 = Math.max(a.x, b.x);
@@ -118,13 +116,11 @@ export default {
             border[y][toGX(x)] = true;
           }
         } else {
-          // Shouldn't happen per puzzle description (always axis-aligned)
-          throw new Error('Non-axis-aligned segment in input');
+          throw new Error('Non axis aligned segment');
         }
       }
 
-      // Flood fill from "outside" to find exterior cells.
-      // We work on an expanded grid (padding) so outside is reachable.
+      // Flood fill outside to find exterior cells
       const H = height;
       const W = width;
       const visited = Array.from({ length: H + 2 }, () =>
@@ -132,16 +128,14 @@ export default {
       );
 
       function isBlocked(ex, ey) {
-        // ex,ey are in expanded coords: 0..W+1, 0..H+1
         if (ex < 1 || ex > W || ey < 1 || ey > H) return false;
         const gx = ex - 1;
         const gy = ey - 1;
-        return border[gy][gx]; // border cells are walls
+        return border[gy][gx];
       }
 
       const queue = [[0, 0]];
       visited[0][0] = true;
-
       const dirs = [
         [1, 0],
         [-1, 0],
@@ -165,7 +159,7 @@ export default {
         }
       }
 
-      // Build allowed grid: border + interior (not reachable from outside and not border)
+      // allowed[y][x] is true for red/green cells (border + interior)
       const allowed = Array.from({ length: H }, () =>
         Array(W).fill(false)
       );
@@ -173,20 +167,19 @@ export default {
       for (let gy = 0; gy < H; gy++) {
         for (let gx = 0; gx < W; gx++) {
           if (border[gy][gx]) {
-            allowed[gy][gx] = true; // border tiles (red/green)
+            allowed[gy][gx] = true;
           } else {
             const ex = gx + 1;
             const ey = gy + 1;
             const outside = visited[ey][ex];
             if (!outside) {
-              // Interior of the loop
               allowed[gy][gx] = true;
             }
           }
         }
       }
 
-      // 2D prefix sum over allowed grid
+      // prefix sums over allowed
       const prefix = Array.from({ length: H + 1 }, () =>
         Array(W + 1).fill(0)
       );
@@ -201,8 +194,6 @@ export default {
         }
       }
 
-      // Helper to query how many allowed cells are inside an inclusive rectangle
-      // in world coordinates.
       function countAllowed(x1, y1, x2, y2) {
         const gx1 = x1 - minX;
         const gy1 = y1 - minY;
@@ -224,18 +215,24 @@ export default {
       return {
         minX,
         minY,
+        width,
+        height,
+        border,
+        allowed,
         countAllowed
       };
     }
 
     function solvePart2(tiles) {
-      if (tiles.length < 2) return { max: 0, a: null, b: null };
+      if (tiles.length < 2) return { max: 0, a: null, b: null, rects: [] };
 
-      const { countAllowed } = buildAllowedGrid(tiles);
+      const region = buildRegion(tiles);
+      const { countAllowed } = region;
 
       let max = 0;
       let bestA = null;
       let bestB = null;
+      const validRects = [];
 
       for (let i = 0; i < tiles.length; i++) {
         for (let j = i + 1; j < tiles.length; j++) {
@@ -249,25 +246,157 @@ export default {
           const rectAreaCells = (x2 - x1 + 1) * (y2 - y1 + 1);
           const allowedCells = countAllowed(x1, y1, x2, y2);
 
-          // Only consider rectangles fully covered by red/green tiles
-          if (allowedCells === rectAreaCells && rectAreaCells > max) {
-            max = rectAreaCells;
-            bestA = a;
-            bestB = b;
+          if (allowedCells === rectAreaCells) {
+            validRects.push({ a, b, area: rectAreaCells });
+            if (rectAreaCells > max) {
+              max = rectAreaCells;
+              bestA = a;
+              bestB = b;
+            }
           }
         }
       }
 
-      return { max, a: bestA, b: bestB };
+      // sort valid rects by area descending
+      validRects.sort((r1, r2) => r2.area - r1.area);
+
+      return { max, a: bestA, b: bestB, rects: validRects, region };
+    }
+
+    function drawVisualization(region, tiles, rects, rectIndex) {
+      vizWrapper.innerHTML = `
+        <canvas id="day09-canvas" style="border:1px solid #333; background:#050505;"></canvas>
+        <div style="margin-top:0.5rem; display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+          <button id="day09-prev-rect" class="btn">[Prev Rectangle]</button>
+          <button id="day09-next-rect" class="btn">[Next Rectangle]</button>
+          <span id="day09-rect-info" style="color:#cccccc;"></span>
+        </div>
+      `;
+
+      const canvas = document.getElementById('day09-canvas');
+      const ctx = canvas.getContext('2d');
+
+      const { minX, minY, width, height, border, allowed } = region;
+
+      // pick a cell size that keeps things reasonably sized
+      const maxCanvasSize = 500;
+      const cellSize = Math.floor(
+        Math.max(8, Math.min(maxCanvasSize / width, maxCanvasSize / height))
+      );
+
+      canvas.width = width * cellSize;
+      canvas.height = height * cellSize;
+
+      // quick lookup for red tiles
+      const redSet = new Set(tiles.map(t => `${t.x},${t.y}`));
+
+      // fill background
+      ctx.fillStyle = '#050505';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // draw grid cells
+      for (let gy = 0; gy < height; gy++) {
+        for (let gx = 0; gx < width; gx++) {
+          const screenX = gx * cellSize;
+          const screenY = gy * cellSize;
+          const worldX = minX + gx;
+          const worldY = minY + gy;
+          const key = `${worldX},${worldY}`;
+          const isRed = redSet.has(key);
+          const isBorder = border[gy][gx];
+          const isAllowed = allowed[gy][gx];
+
+          if (!isAllowed) {
+            ctx.fillStyle = '#111111'; // outside region
+          } else if (isRed) {
+            ctx.fillStyle = '#cc3333'; // red tile
+          } else if (isBorder) {
+            ctx.fillStyle = '#33ff66'; // loop border (green)
+          } else {
+            ctx.fillStyle = '#114422'; // interior green
+          }
+
+          ctx.fillRect(screenX, screenY, cellSize, cellSize);
+        }
+      }
+
+      // highlight current rectangle if any
+      if (rects.length > 0 && rectIndex >= 0 && rectIndex < rects.length) {
+        const rect = rects[rectIndex];
+        const { a, b } = rect;
+        const x1 = Math.min(a.x, b.x);
+        const x2 = Math.max(a.x, b.x);
+        const y1 = Math.min(a.y, b.y);
+        const y2 = Math.max(a.y, b.y);
+
+        const gx1 = (x1 - minX) * cellSize;
+        const gy1 = (y1 - minY) * cellSize;
+        const gx2 = (x2 - minX + 1) * cellSize;
+        const gy2 = (y2 - minY + 1) * cellSize;
+
+        ctx.save();
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = '#ffff00';
+        ctx.fillRect(gx1, gy1, gx2 - gx1, gy2 - gy1);
+        ctx.restore();
+
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ffff00';
+        ctx.strokeRect(gx1 + 1, gy1 + 1, gx2 - gx1 - 2, gy2 - gy1 - 2);
+      }
+
+      // update rect info
+      const info = document.getElementById('day09-rect-info');
+      if (rects.length === 0) {
+        info.textContent = 'No valid red/green rectangles found.';
+      } else {
+        const r = rects[rectIndex];
+        info.textContent = `Rectangle ${rectIndex + 1} of ${rects.length} • area ${r.area} • corners (${r.a.x},${r.a.y}) to (${r.b.x},${r.b.y})`;
+      }
+
+      // hook up nav buttons
+      const prevBtn = document.getElementById('day09-prev-rect');
+      const nextBtn = document.getElementById('day09-next-rect');
+
+      prevBtn.addEventListener('click', () => {
+        if (rects.length === 0) return;
+        const newIndex = (rectIndex - 1 + rects.length) % rects.length;
+        drawVisualization(region, tiles, rects, newIndex);
+      });
+
+      nextBtn.addEventListener('click', () => {
+        if (rects.length === 0) return;
+        const newIndex = (rectIndex + 1) % rects.length;
+        drawVisualization(region, tiles, rects, newIndex);
+      });
     }
 
     visualizeBtn.addEventListener('click', () => {
       const input = inputEl.value.trim();
       if (!input) {
         resultsEl.innerHTML = '<p style="color:orange;">Please paste puzzle input first.</p>';
+        vizWrapper.innerHTML = '';
         return;
       }
-      resultsEl.innerHTML = '<p style="color:#cccccc;">Visualization coming soon...</p>';
+
+      let tiles;
+      try {
+        tiles = parseTiles(input);
+      } catch (e) {
+        resultsEl.innerHTML = '<p style="color:#ff6666;">Error parsing input. Make sure each line is "x,y".</p>';
+        vizWrapper.innerHTML = '';
+        return;
+      }
+
+      const p2 = solvePart2(tiles);
+
+      if (!p2.region) {
+        vizWrapper.innerHTML = '<p style="color:#ff6666;">Could not build red/green region.</p>';
+        return;
+      }
+
+      drawVisualization(p2.region, tiles, p2.rects, 0);
+      resultsEl.innerHTML = '<p style="color:#cccccc;">Use the buttons to cycle through valid part 2 rectangles.</p>';
     });
 
     revealBtn.addEventListener('click', () => {
