@@ -1,4 +1,3 @@
-
 export default {
   title: 'Day 9: Movie Theater',
   description: 'Largest rectangles anchored on red tiles.',
