@@ -203,17 +203,19 @@ export default {
 
       try {
         const nodes = parseInput(input);
-        const linksFirst1000 = computeLinks(nodes, 1000);
+        const maxPossibleLinks = (nodes.length * (nodes.length - 1)) / 2;
+        const maxStepsP1 = Math.min(1000, maxPossibleLinks);
+        const linksFirst1000 = computeLinks(nodes, maxStepsP1);
         const allLinks = computeLinks(nodes);
         const states = precomputeStates(nodes, linksFirst1000);
-        const finalState = states[1000];
+        const finalState = states[maxStepsP1];
         const part2 = solvePart2(nodes, allLinks);
 
         solutionEl.innerHTML = `
           <div class="code-block" style="margin-top:1rem;">
             <pre><strong style="color:#00cc00;">--- Part 1 ---</strong>
 Junction boxes: ${nodes.length}
-After 1000 connections:
+After ${maxStepsP1} connections:
   Circuits: ${finalState.numCircuits}
   Top 3 sizes: ${finalState.components.slice(0, 3).map(c => c.size).join(', ')}
   
@@ -243,7 +245,9 @@ Continue until all boxes form a single circuit...
       try {
         // Parse and prepare data
         const nodes = parseInput(input);
-        const linksP1 = computeLinks(nodes, 1000);
+        const maxPossibleLinks = (nodes.length * (nodes.length - 1)) / 2;
+        const maxStepsP1 = Math.min(1000, maxPossibleLinks);
+        const linksP1 = computeLinks(nodes, maxStepsP1);
         const allLinks = computeLinks(nodes);
         const statesP1 = precomputeStates(nodes, linksP1);
         const statesP2 = precomputeStates(nodes, allLinks);
@@ -272,17 +276,28 @@ Continue until all boxes form a single circuit...
                     <button id="day08-play-p2" class="btn">[Play Part 2]</button>
                     <button id="day08-pause" class="btn" disabled>[Pause]</button>
                     <button id="day08-reset" class="btn">[Reset]</button>
-                    <button id="day08-toggle-mode" class="btn">[Toggle Mode]</button>
                   </div>
                   
                   <div style="margin-bottom: 1rem;">
-                    <label style="color: #00cc00; font-size: 0.9rem;">Step: <span id="day08-step-label">0</span> / <span id="day08-max-steps">1000</span></label>
+                    <label style="color: #00cc00; font-size: 0.9rem;">Step: <span id="day08-step-label">0</span> / <span id="day08-max-steps">${maxStepsP1}</span></label>
                     <input 
                       id="day08-step-slider" 
                       type="range" 
                       min="0" 
-                      max="1000" 
+                      max="${maxStepsP1}" 
                       value="0" 
+                      style="width: 100%; accent-color: #00cc00;"
+                    />
+                  </div>
+
+                  <div style="margin-bottom: 1rem;">
+                    <label style="color: #00cc00; font-size: 0.9rem;">Speed: <span id="day08-speed-label">10</span> ms</label>
+                    <input 
+                      id="day08-speed-slider" 
+                      type="range" 
+                      min="1" 
+                      max="100" 
+                      value="10" 
                       style="width: 100%; accent-color: #00cc00;"
                     />
                   </div>
@@ -306,9 +321,7 @@ Continue until all boxes form a single circuit...
                 <div style="padding: 1rem; background: #0a0a0a; border: 1px solid #333; font-size: 0.85rem; color: #888;">
                   <strong style="color: #00cc00;">Instructions:</strong>
                   <ul style="margin: 0.5rem 0; padding-left: 1.5rem; line-height: 1.5;">
-                    <li>Scroll to zoom</li>
                     <li>Play to animate connections</li>
-                    <li>Toggle Mode: fixed vs force-directed</li>
                     <li>Hero colors mark top 3 circuits</li>
                   </ul>
                 </div>
@@ -417,23 +430,12 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
     .backgroundColor('#0a0a0a')
     .d3VelocityDecay(1)
     .enableNodeDrag(false)
-    .enableNavigationControls(false);
-
-  // Set initial camera position and lookAt origin (no transition)
-  const startAngle = 45;
-  const distance = 600;
-  Graph.cameraPosition(
-    { 
-      x: distance * Math.sin(startAngle * Math.PI / 180), 
-      y: distance * 0.3, 
-      z: distance * Math.cos(startAngle * Math.PI / 180) 
-    },
-    { x: 0, y: 0, z: 0 },
-    0  // no transition
-  );
+    .enableNavigationControls(false)
+    .showNavInfo(false);  // Hide the navigation info text at bottom
 
   // Auto-rotation
-  let angle = startAngle;
+  let angle = 45;
+  const distance = 600;
   setInterval(() => {
     angle += 0.3;
     Graph.cameraPosition(
@@ -450,7 +452,7 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
   let currentStep = 0;
   let isPlaying = false;
   let playInterval = null;
-  let useFixedLayout = true;
+  let animationSpeed = 10;
   let isPart2 = false;
   let currentLinks = linksP1;
   let currentStates = statesP1;
@@ -463,7 +465,6 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
   const playP2Btn = document.getElementById('day08-play-p2');
   const pauseBtn = document.getElementById('day08-pause');
   const resetBtn = document.getElementById('day08-reset');
-  const toggleModeBtn = document.getElementById('day08-toggle-mode');
   const linksCountEl = document.getElementById('day08-links-count');
   const circuitsCountEl = document.getElementById('day08-circuits-count');
   const top3El = document.getElementById('day08-top3');
@@ -531,7 +532,10 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
     isPart2 = part2;
     currentLinks = part2 ? linksP2 : linksP1;
     currentStates = part2 ? statesP2 : statesP1;
-    const maxSteps = part2 ? part2Info.step : 1000;
+    
+    // For Part 1, stop at 10 connections (as per puzzle description)
+    // For Part 2, go until the final unifying connection
+    const maxSteps = part2 ? part2Info.step : Math.min(10, linksP1.length);
     
     if (stepSlider) stepSlider.max = maxSteps;
     if (maxStepsLabel) maxStepsLabel.textContent = maxSteps;
@@ -547,7 +551,7 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
         return;
       }
       applyStep(currentStep + 1);
-    }, 1); // 50x faster (was 50ms, now 1ms)
+    }, animationSpeed);
   }
 
   function pause() {
@@ -563,31 +567,23 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
 
   function reset() {
     pause();
-    applyStep(0);
-  }
-
-  function toggleMode() {
-    useFixedLayout = !useFixedLayout;
+    currentStep = 0;
     
-    if (useFixedLayout) {
-      // Fixed coordinates
-      nodes.forEach(n => {
-        n.fx = n.originalX;
-        n.fy = n.originalY;
-        n.fz = n.originalZ;
-      });
-      toggleModeBtn.textContent = '[Mode: Fixed]';
-    } else {
-      // Force-directed
-      nodes.forEach(n => {
-        n.fx = undefined;
-        n.fy = undefined;
-        n.fz = undefined;
-      });
-      toggleModeBtn.textContent = '[Mode: Force]';
-    }
+    // Reset all nodes to default gray color
+    nodes.forEach(n => {
+      n.color = '#555577';
+    });
     
-    Graph.graphData(Graph.graphData());
+    // Update graph with no links
+    Graph.graphData({ nodes, links: [] });
+    
+    // Reset UI
+    if (stepSlider) stepSlider.value = 0;
+    if (stepLabel) stepLabel.textContent = 0;
+    if (linksCountEl) linksCountEl.textContent = 0;
+    if (circuitsCountEl) circuitsCountEl.textContent = nodes.length;
+    if (top3El) top3El.textContent = '-';
+    if (productEl) productEl.textContent = '-';
   }
 
   // Event handlers
@@ -595,19 +591,16 @@ function initializeVisualization(nodes, linksP1, linksP2, statesP1, statesP2, pa
   playP2Btn?.addEventListener('click', () => play(true));
   pauseBtn?.addEventListener('click', pause);
   resetBtn?.addEventListener('click', reset);
-  toggleModeBtn?.addEventListener('click', toggleMode);
   stepSlider?.addEventListener('input', (e) => {
     pause();
     applyStep(parseInt(e.target.value));
   });
+  
+  const speedSlider = document.getElementById('day08-speed-slider');
+  const speedLabel = document.getElementById('day08-speed-label');
+  speedSlider?.addEventListener('input', (e) => {
+    animationSpeed = parseInt(e.target.value, 10);
+    if (speedLabel) speedLabel.textContent = animationSpeed;
+  });
 
-  // Don't initialize at step 0 - just show the nodes with no colors or connections
-
-  // Cleanup on navigation
-  window.addEventListener('hashchange', () => {
-    pause();
-    if (Graph) {
-      Graph._destructor?.();
-    }
-  }, { once: true });
 }
