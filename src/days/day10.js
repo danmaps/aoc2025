@@ -208,7 +208,15 @@ const sounds = {
 })();
 
 function playButtonPress() {
-  playSound(sounds.buttonPress, 0.3);
+  // Pick a random sound from all drum categories
+  const categories = ['kick', 'snare', 'hat', 'perc', 'clap'];
+  const randomCategory = categories[Math.floor(Math.random() * categories.length)];
+  const soundList = drumSounds[randomCategory];
+  const randomSound = soundList[Math.floor(Math.random() * soundList.length)];
+  
+  loadSound('../src/assets/' + randomSound).then(buffer => {
+    if (buffer) playSound(buffer, 0.3);
+  });
 }
 
 function playSolvedSound() {
@@ -969,7 +977,7 @@ export default {
                 type="range" 
                 id="day10-speed" 
                 min="0.5" 
-                max="50" 
+                max="10" 
                 step="0.5" 
                 value="1" 
                 style="width: 120px; cursor: pointer;"
