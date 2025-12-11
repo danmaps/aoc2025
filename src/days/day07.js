@@ -1,117 +1,181 @@
 function parseManifold(input) {
-  return input.split('\n').map(line => line.split(''));
-}
-
-function findStart(grid) {
-  for (let row = 0; row < grid.length; row++) {
-    for (let col = 0; col < grid[row].length; col++) {
-      if (grid[row][col] === 'S') {
-        return { row, col };
-      }
-    }
-  }
-  return null;
+  return input.split('\n');
 }
 
 function simulateBeams(grid) {
-  const start = findStart(grid);
-  if (!start) return 0;
+  // Find starting position
+  const startCol = grid[0].indexOf('S');
+  if (startCol === -1) return 0;
   
+  // Map of column position -> beam count at that position
+  let beams = new Map([[startCol, 1]]);
   let splitCount = 0;
-  const beams = [{ row: start.row, col: start.col, dir: 'down' }];
-  const visited = new Set();
   
-  while (beams.length > 0) {
-    const beam = beams.shift();
-    const key = `${beam.row},${beam.col},${beam.dir}`;
+  for (let i = 0; i < grid.length; i++) {
+    const nextBeams = new Map();
     
-    if (visited.has(key)) continue;
-    visited.add(key);
-    
-    if (beam.row < 0 || beam.row >= grid.length || 
-        beam.col < 0 || beam.col >= grid[0].length) {
-      continue;
-    }
-    
-    const cell = grid[beam.row][beam.col];
-    
-    if (cell === '^') {
-      splitCount++;
-      beams.push({ row: beam.row + 1, col: beam.col - 1, dir: 'left' });
-      beams.push({ row: beam.row + 1, col: beam.col + 1, dir: 'right' });
-    } else {
-      if (beam.dir === 'down') {
-        beams.push({ row: beam.row + 1, col: beam.col, dir: 'down' });
-      } else if (beam.dir === 'left') {
-        beams.push({ row: beam.row + 1, col: beam.col - 1, dir: 'left' });
-      } else if (beam.dir === 'right') {
-        beams.push({ row: beam.row + 1, col: beam.col + 1, dir: 'right' });
+    for (const [col, count] of beams.entries()) {
+      if (grid[i]?.charAt(col) === '.') {
+        // Empty space: beam continues straight down
+        nextBeams.set(col, (nextBeams.get(col) ?? 0) + count);
+      } else {
+        // Splitter ('^' or 'S'): beam splits left and right
+        nextBeams.set(col - 1, (nextBeams.get(col - 1) ?? 0) + count);
+        nextBeams.set(col + 1, (nextBeams.get(col + 1) ?? 0) + count);
+        splitCount++;
       }
     }
+    
+    beams = nextBeams;
   }
   
   return splitCount;
 }
 
-function visualizeManifold(grid, maxSteps = 50) {
-  const start = findStart(grid);
-  if (!start) return [];
+function visualizeManifold(grid) {
+  // Find starting position
+  const startCol = grid[0].indexOf('S');
+  if (startCol === -1) return [];
   
   const frames = [];
-  const beams = [{ row: start.row, col: start.col, dir: 'down' }];
-  const allBeamPositions = new Set();
-  const visited = new Set();
+  let beams = new Map([[startCol, 1]]);
   
-  for (let step = 0; step < maxSteps && beams.length > 0; step++) {
-    const currentBeams = [...beams];
-    const frame = grid.map(row => [...row]);
-    
-    for (const beam of currentBeams) {
-      if (beam.row >= 0 && beam.row < grid.length && 
-          beam.col >= 0 && beam.col < grid[0].length) {
-        const cell = grid[beam.row][beam.col];
-        if (cell === '.' || cell === 'S') {
-          frame[beam.row][beam.col] = '|';
+  for (let row = 0; row < grid.length; row++) {
+    // Create frame showing current state
+    const frameLines = grid.map((line, r) => {
+      if (r < row) return line; // Past rows unchanged
+      if (r === row) {
+        // Show current beam positions
+        const chars = line.split('');
+        for (const [col] of beams.entries()) {
+          if (col >= 0 && col < chars.length && (chars[col] === '.' || chars[col] === 'S')) {
+            chars[col] = '|';
+          }
         }
-        allBeamPositions.add(`${beam.row},${beam.col}`);
+        return chars.join('');
       }
-    }
+      return line; // Future rows unchanged
+    });
     
-    frames.push(frame.map(row => row.join('')).join('\n'));
+    frames.push(frameLines.join('\n'));
     
-    const nextBeams = [];
-    for (const beam of beams) {
-      const key = `${beam.row},${beam.col},${beam.dir}`;
-      if (visited.has(key)) continue;
-      visited.add(key);
-      
-      if (beam.row < 0 || beam.row >= grid.length || 
-          beam.col < 0 || beam.col >= grid[0].length) {
-        continue;
-      }
-      
-      const cell = grid[beam.row][beam.col];
-      
-      if (cell === '^') {
-        nextBeams.push({ row: beam.row + 1, col: beam.col - 1, dir: 'left' });
-        nextBeams.push({ row: beam.row + 1, col: beam.col + 1, dir: 'right' });
+    // Calculate next beam positions
+    const nextBeams = new Map();
+    for (const [col, count] of beams.entries()) {
+      if (grid[row]?.charAt(col) === '.') {
+        nextBeams.set(col, (nextBeams.get(col) ?? 0) + count);
       } else {
-        if (beam.dir === 'down') {
-          nextBeams.push({ row: beam.row + 1, col: beam.col, dir: 'down' });
-        } else if (beam.dir === 'left') {
-          nextBeams.push({ row: beam.row + 1, col: beam.col - 1, dir: 'left' });
-        } else if (beam.dir === 'right') {
-          nextBeams.push({ row: beam.row + 1, col: beam.col + 1, dir: 'right' });
-        }
+        nextBeams.set(col - 1, (nextBeams.get(col - 1) ?? 0) + count);
+        nextBeams.set(col + 1, (nextBeams.get(col + 1) ?? 0) + count);
       }
     }
-    
-    beams.length = 0;
-    beams.push(...nextBeams);
+    beams = nextBeams;
   }
   
   return frames;
 }
+
+// Part 2: Quantum Tachyon Manifold (count unique timelines/paths)
+function countQuantumTimelines(grid) {
+  const startCol = grid[0].indexOf('S');
+  if (startCol === -1) return 0;
+  
+  // Track number of unique paths to each column position
+  let beams = new Map([[startCol, 1]]);
+  
+  for (let row = 0; row < grid.length; row++) {
+    const nextBeams = new Map();
+    
+    for (const [col, pathCount] of beams.entries()) {
+      if (grid[row]?.charAt(col) === '.') {
+        // Continue straight - all paths continue
+        nextBeams.set(col, (nextBeams.get(col) ?? 0) + pathCount);
+      } else {
+        // Split: each path splits into two (quantum superposition)
+        nextBeams.set(col - 1, (nextBeams.get(col - 1) ?? 0) + pathCount);
+        nextBeams.set(col + 1, (nextBeams.get(col + 1) ?? 0) + pathCount);
+      }
+    }
+    
+    beams = nextBeams;
+  }
+  
+  // Sum all unique timelines (paths that reached each endpoint)
+  let totalTimelines = 0;
+  for (const count of beams.values()) {
+    totalTimelines += count;
+  }
+  
+  return totalTimelines;
+}
+
+function visualizeQuantumTimelines(grid) {
+  const startCol = grid[0].indexOf('S');
+  if (startCol === -1) return [];
+  
+  const frames = [];
+  let beams = new Map([[startCol, 1]]);
+  
+  for (let row = 0; row < grid.length; row++) {
+    // Calculate total timelines at this step
+    let totalTimelines = 0;
+    for (const count of beams.values()) {
+      totalTimelines += count;
+    }
+    
+    // Create frame showing all quantum beam positions with their counts
+    const frameLines = grid.map((line, r) => {
+      if (r === row) {
+        const chars = line.split('');
+        for (const [col, count] of beams.entries()) {
+          if (col >= 0 && col < chars.length && (chars[col] === '.' || chars[col] === 'S')) {
+            // Show the beam, and if count > 1, show a marker
+            chars[col] = count > 9 ? '*' : (count > 1 ? String(count) : '|');
+          }
+        }
+        return chars.join('');
+      }
+      return line;
+    });
+    
+    frames.push({
+      grid: frameLines.join('\n'),
+      timelineCount: totalTimelines,
+      positionCount: beams.size
+    });
+    
+    // Calculate next positions (quantum split doubles the timelines)
+    const nextBeams = new Map();
+    for (const [col, pathCount] of beams.entries()) {
+      if (grid[row]?.charAt(col) === '.') {
+        nextBeams.set(col, (nextBeams.get(col) ?? 0) + pathCount);
+      } else {
+        nextBeams.set(col - 1, (nextBeams.get(col - 1) ?? 0) + pathCount);
+        nextBeams.set(col + 1, (nextBeams.get(col + 1) ?? 0) + pathCount);
+      }
+    }
+    beams = nextBeams;
+  }
+  
+  return frames;
+}
+
+const EXAMPLE_INPUT = `.......S.......
+...............
+.......^.......
+...............
+......^.^......
+...............
+.....^.^.^.....
+...............
+....^.^...^....
+...............
+...^.^...^.^...
+...............
+..^...^.....^..
+...............
+.^.^.^.^.^...^.
+...............`;
 
 export default {
   title: 'Day 7: Laboratories',
@@ -134,8 +198,9 @@ export default {
             style="width: 100%; min-height: 150px; background: #0a0a0a; color: #00cc00; border: 1px solid #333; padding: 0.75rem; font-family: 'Source Code Pro', monospace; font-size: 12px; resize: vertical;"
           ></textarea>
           <div style="margin-top: 0.5rem;">
-            <button id="day07-visualize" class="btn" style="margin-right: 0.5rem;">[Visualize]</button>
-            <button id="day07-reveal" class="btn" style="margin-right: 0.5rem;">[Reveal Solution]</button>
+            <button id="day07-visualize" class="btn" style="margin-right: 0.5rem;">[Visualize Part 1]</button>
+            <button id="day07-part2" class="btn" style="margin-right: 0.5rem;">[Visualize Part 2 - Quantum]</button>
+            <button id="day07-reveal" class="btn">[Reveal Solutions]</button>
           </div>
         </div>
 
@@ -147,7 +212,86 @@ export default {
     const inputEl = document.getElementById('day07-input');
     const visualizeBtn = document.getElementById('day07-visualize');
     const revealBtn = document.getElementById('day07-reveal');
+    const part2Btn = document.getElementById('day07-part2');
     const resultsEl = document.getElementById('day07-results');
+
+    // Populate input with example
+    inputEl.value = EXAMPLE_INPUT;
+
+    // Auto-visualize example on load
+    const exampleGrid = parseManifold(EXAMPLE_INPUT);
+    const exampleFrames = visualizeManifold(exampleGrid);
+    const exampleSplitCount = simulateBeams(exampleGrid);
+    
+    let currentFrame = 0;
+    const displayFrame = () => {
+      if (currentFrame < exampleFrames.length) {
+        resultsEl.innerHTML = `
+          <div style="margin-top: 1rem;">
+            <p style="color: #00cc00;">Part 1: Step ${currentFrame + 1}/${exampleFrames.length}</p>
+            <pre style="background: #0a0a0a; color: #00cc00; padding: 1rem; font-size: 14px; overflow-x: auto;">${exampleFrames[currentFrame]}</pre>
+          </div>
+        `;
+        currentFrame++;
+        setTimeout(displayFrame, 300);
+      } else {
+        resultsEl.innerHTML += `
+          <div style="margin-top: 1rem; padding: 1rem; background: #0a0a0a; border: 1px solid #333;">
+            <p style="color: #00cc00;">Part 1 Animation complete!</p>
+            <p style="color: #ffff00; font-size: 20px; font-weight: bold;">Solution: ${exampleSplitCount}</p>
+            <p style="color: #999;">total splits</p>
+          </div>
+        `;
+      }
+    };
+    displayFrame();
+
+    part2Btn.addEventListener('click', () => {
+      const input = inputEl.value.trim();
+      if (!input) {
+        resultsEl.innerHTML = '<p style="color:orange;">Please paste puzzle input first.</p>';
+        return;
+      }
+      
+      const grid = parseManifold(input);
+      const frames = visualizeQuantumTimelines(grid);
+      const totalTimelines = countQuantumTimelines(grid);
+      
+      let currentFrame = 0;
+      const displayFrame = () => {
+        if (currentFrame < frames.length) {
+          const frame = frames[currentFrame];
+          resultsEl.innerHTML = `
+            <div style="margin-top: 1rem;">
+              <p style="color: #00cc00;">Part 2 - Quantum Manifold: Step ${currentFrame + 1}/${frames.length}</p>
+              <p style="color: #ffff00;">Active Timelines: ${frame.timelineCount} | Positions: ${frame.positionCount}</p>
+              <pre style="background: #0a0a0a; color: #00cc00; padding: 1rem; font-size: 14px; overflow-x: auto; line-height: 1.4;">${frame.grid}</pre>
+              <p style="color: #999; font-size: 12px; margin-top: 0.5rem;">Numbers show timeline counts at each position (>9 shown as *)</p>
+            </div>
+          `;
+          currentFrame++;
+          setTimeout(displayFrame, 300);
+        } else {
+          resultsEl.innerHTML += `
+            <div style="margin-top: 1rem; padding: 1rem; background: #0a0a0a; border: 1px solid #333;">
+              <p style="color: #00cc00;">✨ Part 2 Solution:</p>
+              <p style="color: #ffff00; font-size: 24px; font-weight: bold;">${totalTimelines}</p>
+              <p style="color: #cccccc; font-size: 14px;">Total timelines (many-worlds interpretation)</p>
+              
+              <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #333;">
+                <p style="color: #00cc00; font-size: 14px; margin-bottom: 0.5rem;">💡 How it works:</p>
+                <p style="color: #999; font-size: 13px; line-height: 1.6;">
+                  In the quantum manifold, a single particle takes <em>both</em> paths at each splitter.
+                  We track all unique positions the particle can reach (quantum superposition).
+                  Each unique endpoint represents a different timeline in the many-worlds interpretation.
+                </p>
+              </div>
+            </div>
+          `;
+        }
+      };
+      displayFrame();
+    });
 
     visualizeBtn.addEventListener('click', () => {
       const input = inputEl.value.trim();
@@ -157,14 +301,14 @@ export default {
       }
       
       const grid = parseManifold(input);
-      const frames = visualizeManifold(grid, 20);
+      const frames = visualizeManifold(grid);
       
       let currentFrame = 0;
       const displayFrame = () => {
         if (currentFrame < frames.length) {
           resultsEl.innerHTML = `
             <div style="margin-top: 1rem;">
-              <p style="color: #00cc00;">Step ${currentFrame + 1}/${frames.length}</p>
+              <p style="color: #00cc00;">Part 1: Step ${currentFrame + 1}/${frames.length}</p>
               <pre style="background: #0a0a0a; color: #00cc00; padding: 1rem; font-size: 14px; overflow-x: auto;">${frames[currentFrame]}</pre>
             </div>
           `;
@@ -184,12 +328,34 @@ export default {
       
       const grid = parseManifold(input);
       const splitCount = simulateBeams(grid);
+      const timelineCount = countQuantumTimelines(grid);
       
       resultsEl.innerHTML = `
         <div style="margin-top: 1rem; padding: 1rem; background: #0a0a0a; border: 1px solid #333;">
-          <p style="color: #00cc00; font-size: 16px; margin-bottom: 0.5rem;">✨ Part 1 Solution:</p>
-          <p style="color: #ffff00; font-size: 24px; font-weight: bold;">${splitCount}</p>
-          <p style="color: #cccccc; font-size: 14px;">Total beam splits in the tachyon manifold</p>
+          <p style="color: #00cc00; font-size: 16px; margin-bottom: 1rem;">✨ Solutions:</p>
+          
+          <div style="margin-bottom: 1.5rem;">
+            <p style="color: #cccccc; font-size: 14px; margin-bottom: 0.3rem;">Part 1:</p>
+            <p style="color: #ffff00; font-size: 24px; font-weight: bold; margin: 0;">${splitCount}</p>
+            <p style="color: #999; font-size: 12px;">Total beam splits in the tachyon manifold</p>
+          </div>
+          
+          <div>
+            <p style="color: #cccccc; font-size: 14px; margin-bottom: 0.3rem;">Part 2:</p>
+            <p style="color: #ffff00; font-size: 24px; font-weight: bold; margin: 0;">${timelineCount}</p>
+            <p style="color: #999; font-size: 12px;">Total timelines (many-worlds interpretation)</p>
+          </div>
+          
+          <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #333;">
+            <p style="color: #00cc00; font-size: 14px; margin-bottom: 0.5rem;">💡 How it works:</p>
+            <p style="color: #999; font-size: 13px; line-height: 1.6;">
+              <strong>Part 1:</strong> Tracks beam <em>counts</em> at each position. Each splitter increments the split counter.<br>
+              <strong>Part 2:</strong> Each quantum split doubles the timelines. Tracks total paths through the manifold.
+            </p>
+            <p style="color: #666; font-size: 12px; margin-top: 0.5rem;">
+              Solution approach inspired by <a href="https://github.com/Cinnamonsroll/AdventOfCode2025/blob/main/day7/part1.ts" target="_blank" style="color: #009900;">@Cinnamonsroll</a>
+            </p>
+          </div>
         </div>
       `;
     });
