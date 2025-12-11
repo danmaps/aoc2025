@@ -14,7 +14,13 @@ function parseMachine(line) {
     buttons.push(indices);
   }
   
-  return { patternString, target, buttons };
+  // Parse joltage requirements for Part 2
+  const joltageMatch = line.match(/\{([0-9,]+)\}/);
+  const joltageRequirements = joltageMatch 
+    ? joltageMatch[1].split(',').map(Number)
+    : null;
+  
+  return { patternString, target, buttons, joltageRequirements };
 }
 
 // GF(2) Gaussian elimination solver
@@ -108,6 +114,180 @@ function solveGF2(target, buttons) {
   const optimalCombo = bestSolution.map((v, i) => v === 1 ? i : -1).filter(i => i >= 0);
   
   return { minPresses, solution: bestSolution, optimalCombo };
+}
+
+// Part 2: Integer solver for joltage counters
+// Solve Ax = b where A is button matrix, b is target, x is button presses
+// Using Gaussian elimination + DFS over free variables with bounds
+function solveJoltage(joltageRequirements, buttons) {
+  const R = joltageRequirements.length; // rows (counters)
+  const C = buttons.length; // columns (buttons)
+  
+  console.log('Solving joltage:', { R, C, targets: joltageRequirements });
+  
+  if (C === 0) return { minPresses: null, solution: null, optimalCombo: [] };
+  
+  // Build matrix A where A[r][c] = 1 if button c affects counter r
+  const matrix = Array(R).fill(0).map(() => Array(C).fill(0));
+  const bounds = Array(C).fill(Infinity);
+  
+  for (let c = 0; c < C; c++) {
+    if (buttons[c].length > 0) {
+      for (const r of buttons[c]) {
+        if (r < R) {
+          matrix[r][c] = 1;
+          // Button c can't be pressed more than the smallest target it affects
+          bounds[c] = Math.min(bounds[c], joltageRequirements[r]);
+        }
+      }
+    } else {
+      bounds[c] = 0; // Useless button
+    }
+  }
+  
+  // Set any remaining infinity bounds to 0
+  for (let c = 0; c < C; c++) {
+    if (bounds[c] === Infinity) bounds[c] = 0;
+  }
+  
+  // Copy for Gaussian elimination
+  const matrixCopy = matrix.map(row => [...row]);
+  const rhs = [...joltageRequirements];
+  
+  // Gaussian elimination
+  const pivotCols = [];
+  let pivotRow = 0;
+  const colToPivotRow = new Map();
+  
+  for (let col = 0; col < C && pivotRow < R; col++) {
+    // Find pivot
+    let sel = pivotRow;
+    while (sel < R && Math.abs(matrixCopy[sel][col]) < 1e-9) sel++;
+    
+    if (sel === R) continue; // No pivot in this column
+    
+    // Swap rows
+    [matrixCopy[pivotRow], matrixCopy[sel]] = [matrixCopy[sel], matrixCopy[pivotRow]];
+    [rhs[pivotRow], rhs[sel]] = [rhs[sel], rhs[pivotRow]];
+    
+    // Normalize pivot row
+    const pivotVal = matrixCopy[pivotRow][col];
+    for (let j = col; j < C; j++) {
+      matrixCopy[pivotRow][j] /= pivotVal;
+    }
+    rhs[pivotRow] /= pivotVal;
+    
+    // Eliminate column in other rows
+    for (let i = 0; i < R; i++) {
+      if (i === pivotRow) continue;
+      const factor = matrixCopy[i][col];
+      if (Math.abs(factor) > 1e-9) {
+        for (let j = col; j < C; j++) {
+          matrixCopy[i][j] -= factor * matrixCopy[pivotRow][j];
+        }
+        rhs[i] -= factor * rhs[pivotRow];
+      }
+    }
+    
+    pivotCols.push(col);
+    colToPivotRow.set(col, pivotRow);
+    pivotRow++;
+  }
+  
+  // Check consistency
+  for (let i = pivotRow; i < R; i++) {
+    if (Math.abs(rhs[i]) > 1e-4) {
+      console.log('Inconsistent system - no solution');
+      return { minPresses: null, solution: null, optimalCombo: [] };
+    }
+  }
+  
+  // Identify free variables
+  const isPivot = new Set(pivotCols);
+  const freeVars = [];
+  for (let j = 0; j < C; j++) {
+    if (!isPivot.has(j)) freeVars.push(j);
+  }
+  
+  console.log('System structure:', { pivots: pivotCols.length, freeVars: freeVars.length });
+  
+  // DFS over free variables to find minimum cost solution
+  let best = Infinity;
+  const curSol = Array(C).fill(0);
+  
+  function search(idx, cost) {
+    if (cost >= best) return;
+    
+    if (idx === freeVars.length) {
+      // All free vars assigned, now back-solve pivots
+      let total = cost;
+      let ok = true;
+      
+      for (let i = pivotCols.length - 1; i >= 0; i--) {
+        const col = pivotCols[i];
+        const row = colToPivotRow.get(col);
+        
+        let v = rhs[row];
+        for (let j = col + 1; j < C; j++) {
+          if (Math.abs(matrixCopy[row][j]) > 1e-9) {
+            v -= matrixCopy[row][j] * curSol[j];
+          }
+        }
+        
+        // Check if v is integer
+        if (Math.abs(v - Math.round(v)) > 1e-4) {
+          ok = false;
+          break;
+        }
+        v = Math.round(v);
+        
+        // Check bounds
+        if (v < 0 || v > bounds[col]) {
+          ok = false;
+          break;
+        }
+        
+        curSol[col] = v;
+        total += v;
+        
+        if (total >= best) {
+          ok = false;
+          break;
+        }
+      }
+      
+      if (ok) {
+        best = total;
+        console.log('Found solution:', { total, solution: [...curSol] });
+      }
+      return;
+    }
+    
+    const varIndex = freeVars[idx];
+    const limit = bounds[varIndex];
+    
+    for (let v = 0; v <= limit; v++) {
+      curSol[varIndex] = v;
+      search(idx + 1, cost + v);
+    }
+  }
+  
+  search(0, 0);
+  
+  if (best === Infinity) {
+    console.log('No valid solution found');
+    return { minPresses: null, solution: null, optimalCombo: [] };
+  }
+  
+  const optimalCombo = [];
+  for (let j = 0; j < C; j++) {
+    for (let k = 0; k < curSol[j]; k++) {
+      optimalCombo.push(j);
+    }
+  }
+  
+  console.log('Solution complete:', { minPresses: best, solution: curSol });
+  return { minPresses: best, solution: curSol, optimalCombo };
 }
 
 // Audio system for drum machine
@@ -607,6 +787,114 @@ function createMachineView(machine, machineIndex, totalMachines) {
         min-width: 20px;
         text-align: center;
       }
+      .mode-switch {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 10px;
+        background: #1a1a1a;
+        border-radius: 8px;
+        border: 1px solid #383838;
+      }
+      .mode-switch-label {
+        font-size: 0.7rem;
+        color: #aaa;
+        text-transform: uppercase;
+      }
+      .mode-toggle {
+        position: relative;
+        width: 50px;
+        height: 24px;
+        background: #2a2a2a;
+        border-radius: 12px;
+        border: 1px solid #383838;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+      .mode-toggle::after {
+        content: '';
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 18px;
+        height: 18px;
+        background: #f4b43a;
+        border-radius: 50%;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      }
+      .mode-toggle.joltage {
+        background: #1a2a3a;
+      }
+      .mode-toggle.joltage::after {
+        left: 28px;
+        background: #3ab4f4;
+      }
+      .mode-switch-text {
+        font-size: 0.75rem;
+        color: #f4b43a;
+        font-weight: 600;
+        min-width: 80px;
+      }
+      .mode-switch-text.joltage {
+        color: #3ab4f4;
+      }
+      .meter-container {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+        padding: 16px;
+        background: #1a1a1a;
+        border-radius: 8px;
+      }
+      .meter {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+      }
+      .meter-label {
+        font-size: 0.7rem;
+        color: #aaa;
+        text-transform: uppercase;
+      }
+      .meter-bar {
+        width: 40px;
+        height: 150px;
+        background: #0a0a0a;
+        border: 2px solid #383838;
+        border-radius: 6px;
+        position: relative;
+        overflow: hidden;
+      }
+      .meter-fill {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: linear-gradient(to top, #1a4a6a, #3ab4f4);
+        transition: height 0.3s ease;
+        border-radius: 4px;
+      }
+      .meter-fill.complete {
+        background: linear-gradient(to top, #1a6a4a, #3af4b4);
+      }
+      .meter-value {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #fff;
+        text-shadow: 0 0 4px rgba(0,0,0,0.8);
+        z-index: 2;
+      }
+      .meter-target {
+        font-size: 0.75rem;
+        color: #3ab4f4;
+        font-weight: 600;
+      }
     </style>
     
     <div class="machine-shell" data-machine="${machineIndex}">
@@ -617,15 +905,15 @@ function createMachineView(machine, machineIndex, totalMachines) {
         </div>
         <div class="machine-meta">
           <div class="stat-pill">Presses: <span class="press-count">0</span></div>
-          <div class="stat-pill">Min: <span>${minPresses !== null ? minPresses : '?'}</span></div>
+          <div class="stat-pill">Min: <span class="min-presses-display">${minPresses !== null ? minPresses : '?'}</span></div>
         </div>
       </header>
       
       <section class="lights-panel">
         <div class="strip-block" style="grid-column: 1 / -1;">
           <div class="strip-label">
-            <span>Drum Sequencer</span>
-            <span style="font-size: 0.75rem; color: #aaa;">Pattern: ${patternString}</span>
+            <span class="mode-title">Drum Sequencer</span>
+            <span style="font-size: 0.75rem; color: #aaa;" class="mode-subtitle">Pattern: ${patternString}</span>
           </div>
           <div class="sequencer-grid" style="display: grid; gap: 4px; margin-top: 8px;">
             <!-- Drum tracks will be inserted here -->
@@ -658,7 +946,7 @@ function createMachineView(machine, machineIndex, totalMachines) {
   `;
 }
 
-function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
+function initMachine(container, machine, machineIndex, speedMultiplier = 1, initialMode = 'lights') {
   const shell = container.querySelector(`[data-machine="${machineIndex}"]`);
   if (!shell) return;
   
@@ -673,13 +961,21 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
   const tempoControl = shell.querySelector('.tempo-control');
   const tempoKnob = shell.querySelector('.tempo-knob');
   const tempoValue = shell.querySelector('.tempo-value');
+  const modeTitle = shell.querySelector('.mode-title');
+  const modeSubtitle = shell.querySelector('.mode-subtitle');
+  const minPressesDisplay = shell.querySelector('.min-presses-display');
   
+  let currentMode = initialMode; // 'lights' or 'joltage'
   let currentState = Array(machine.target.length).fill(0);
+  let joltageCounters = machine.joltageRequirements ? Array(machine.joltageRequirements.length).fill(0) : [];
   let pressCount = 0;
   const buttonPressCounts = Array(machine.buttons.length).fill(0);
   let isLooping = false;
   let loopInterval = null;
   let tempo = 3; // 1-10 scale, 3 is default
+  
+  // Store initial mode in dataset for external access
+  shell.dataset.currentMode = currentMode;
   
   // Determine sequencer dimensions (try to make it roughly 4 tracks × N steps)
   const numSteps = machine.target.length;
@@ -702,6 +998,99 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
     }
   }
   loadTrackSounds();
+  
+  // Mode switching
+  function switchMode(newMode) {
+    currentMode = newMode;
+    
+    if (newMode === 'joltage') {
+      modeTitle.textContent = 'Voltage Monitors';
+      modeSubtitle.textContent = machine.joltageRequirements ? 
+        `Requirements: {${machine.joltageRequirements.join(',')}}` : 
+        'No joltage data';
+      
+      // Hide sequencer, show meters
+      sequencerGrid.parentElement.style.display = 'none';
+      
+      // Create meters if they don't exist
+      if (!shell.querySelector('.meter-container')) {
+        const metersHtml = createMeters();
+        const metersDiv = document.createElement('div');
+        metersDiv.innerHTML = metersHtml;
+        sequencerGrid.parentElement.parentElement.appendChild(metersDiv.firstElementChild);
+      } else {
+        shell.querySelector('.meter-container').style.display = 'flex';
+      }
+      
+      // Recalculate min presses for joltage mode
+      if (machine.joltageRequirements) {
+        const joltageResult = solveJoltage(machine.joltageRequirements, machine.buttons);
+        machine.minPressesJoltage = joltageResult.minPresses;
+        machine.optimalComboJoltage = joltageResult.optimalCombo;
+        minPressesDisplay.textContent = machine.minPressesJoltage !== null ? machine.minPressesJoltage : '?';
+      }
+      
+      resetMachine();
+      updateMeters();
+      
+    } else {
+      modeTitle.textContent = 'Drum Sequencer';
+      modeSubtitle.textContent = `Pattern: ${machine.patternString}`;
+      
+      // Show sequencer, hide meters
+      sequencerGrid.parentElement.style.display = 'block';
+      const meterContainer = shell.querySelector('.meter-container');
+      if (meterContainer) {
+        meterContainer.style.display = 'none';
+      }
+      
+      minPressesDisplay.textContent = machine.minPresses !== null ? machine.minPresses : '?';
+      resetMachine();
+      updateSequencer();
+    }
+  }
+  
+  // Expose switchMode function for external control
+  shell.switchToMode = switchMode;
+  
+  function createMeters() {
+    if (!machine.joltageRequirements) return '';
+    
+    const meters = machine.joltageRequirements.map((target, idx) => `
+      <div class="meter">
+        <div class="meter-target">Target: ${target}</div>
+        <div class="meter-bar">
+          <div class="meter-fill" data-meter="${idx}"></div>
+          <div class="meter-value" data-meter-value="${idx}">0</div>
+        </div>
+        <div class="meter-label">Counter ${idx}</div>
+      </div>
+    `).join('');
+    
+    return `<div class="meter-container">${meters}</div>`;
+  }
+  
+  function updateMeters() {
+    if (!machine.joltageRequirements) return;
+    
+    machine.joltageRequirements.forEach((target, idx) => {
+      const fillEl = shell.querySelector(`.meter-fill[data-meter="${idx}"]`);
+      const valueEl = shell.querySelector(`.meter-value[data-meter-value="${idx}"]`);
+      
+      if (fillEl && valueEl) {
+        const current = joltageCounters[idx];
+        const percentage = Math.min(100, (current / target) * 100);
+        fillEl.style.height = percentage + '%';
+        valueEl.textContent = current;
+        
+        if (current === target) {
+          fillEl.classList.add('complete');
+        } else {
+          fillEl.classList.remove('complete');
+        }
+      }
+    });
+  }
   
   function createSequencer() {
     sequencerGrid.innerHTML = '';
@@ -896,13 +1285,25 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
     
     playButtonPress();
     
-    const changedIndices = [];
-    indices.forEach(i => {
-      if (i >= 0 && i < currentState.length) {
-        currentState[i] ^= 1;
-        changedIndices.push(i);
-      }
-    });
+    if (currentMode === 'lights') {
+      // Part 1: XOR toggle
+      const changedIndices = [];
+      indices.forEach(i => {
+        if (i >= 0 && i < currentState.length) {
+          currentState[i] ^= 1;
+          changedIndices.push(i);
+        }
+      });
+      updateSequencer(changedIndices);
+    } else {
+      // Part 2: Increment counters
+      indices.forEach(i => {
+        if (i >= 0 && i < joltageCounters.length) {
+          joltageCounters[i] += 1;
+        }
+      });
+      updateMeters();
+    }
     
     pressCountEl.textContent = String(pressCount);
     
@@ -911,12 +1312,12 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
       padEl._pressLabel.textContent = '×' + buttonPressCounts[idx];
     }
     
-    updateSequencer(changedIndices);
     updateStatus();
   }
   
   function resetMachine() {
     currentState = Array(machine.target.length).fill(0);
+    joltageCounters = machine.joltageRequirements ? Array(machine.joltageRequirements.length).fill(0) : [];
     pressCount = 0;
     buttonPressCounts.fill(0);
     pressCountEl.textContent = '0';
@@ -927,43 +1328,65 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
     loopBtn.textContent = '🔄 Loop';
     loopBtn.style.display = 'none';
     tempoControl.style.display = 'none';
-    updateSequencer();
+    
+    if (currentMode === 'lights') {
+      updateSequencer();
+    } else {
+      updateMeters();
+    }
     updateStatus();
   }
   
   function isSolved() {
-    return currentState.every((v, i) => v === machine.target[i]);
+    if (currentMode === 'lights') {
+      return currentState.every((v, i) => v === machine.target[i]);
+    } else {
+      return machine.joltageRequirements && 
+        joltageCounters.every((v, i) => v === machine.joltageRequirements[i]);
+    }
   }
   
   function updateStatus() {
     const solved = isSolved();
+    const minPresses = currentMode === 'lights' ? machine.minPresses : machine.minPressesJoltage;
+    
     if (solved) {
-      statusChipEl.textContent = 'Locked in · Beat ready';
+      statusChipEl.textContent = currentMode === 'lights' ? 'Locked in · Beat ready' : 'Voltage configured ⚡';
       statusChipEl.classList.remove('badge-warn');
       statusChipEl.classList.add('badge-ok');
-      solvedNoteEl.textContent = pressCount <= machine.minPresses
-        ? 'Nice! You matched or beat the optimal press count.'
-        : `Solved, but used ${pressCount - machine.minPresses} extra presses.`;
-      loopBtn.style.display = 'inline-block';
-      tempoControl.style.display = 'flex';
+      
+      if (minPresses !== null && pressCount <= minPresses) {
+        solvedNoteEl.textContent = 'Nice! You matched or beat the optimal press count.';
+      } else if (minPresses !== null) {
+        solvedNoteEl.textContent = `Solved, but used ${pressCount - minPresses} extra presses.`;
+      } else {
+        solvedNoteEl.textContent = 'Solved!';
+      }
+      
+      loopBtn.style.display = currentMode === 'lights' ? 'inline-block' : 'none';
+      tempoControl.style.display = currentMode === 'lights' ? 'flex' : 'none';
       playSolvedSound();
     } else {
-      statusChipEl.textContent = 'Not solved';
+      statusChipEl.textContent = currentMode === 'lights' ? 'Not solved' : 'Adjusting voltage...';
       statusChipEl.classList.remove('badge-ok');
       statusChipEl.classList.add('badge-warn');
-      solvedNoteEl.textContent = 'Try to match the target in as few presses as possible.';
+      solvedNoteEl.textContent = currentMode === 'lights' 
+        ? 'Try to match the target in as few presses as possible.'
+        : 'Press buttons to increment counters to target values.';
       loopBtn.style.display = 'none';
     }
   }
   
   async function replayOptimal() {
-    if (!machine.optimalCombo || machine.optimalCombo.length === 0) return;
+    const combo = currentMode === 'lights' ? machine.optimalCombo : machine.optimalComboJoltage;
+    if (!combo || combo.length === 0) return;
+    
     resetMachine();
     replayBtn.disabled = true;
     playMachineBtn.disabled = true;
     playMachineBtn.classList.add('playing');
     
-    for (const idx of machine.optimalCombo) {
+    for (const idx of combo) {
       await new Promise(resolve => setTimeout(resolve, 260 / speedMultiplier));
       
       // Visually press the pad
@@ -1024,8 +1447,14 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
   
   createSequencer();
   renderPads();
-  updateSequencer();
-  updateStatus();
+  
+  // Apply initial mode if not lights
+  if (initialMode === 'joltage' && machine.joltageRequirements) {
+    switchMode('joltage');
+  } else {
+    updateSequencer();
+    updateStatus();
+  }
 }
 
 export default {
@@ -1076,6 +1505,70 @@ export default {
         </div>
 
         <div id="day10-results" style="margin-top:1rem;"></div>
+
+        <div style="margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #333;">
+          <h3 style="color: #f4b43a;">&gt; How This Works</h3>
+          
+          <div style="color: #cccccc; line-height: 1.7; margin-top: 1rem;">
+            <h4 style="color: #00cc00; margin-top: 1.5rem; margin-bottom: 0.5rem;">Part 1: Indicator Lights (XOR)</h4>
+            <p style="margin-bottom: 0.75rem;">
+              The indicator lights problem is modeled over <strong>GF(2)</strong> (the Galois field with 2 elements), 
+              where each light is either ON or OFF, and each button press <em>toggles</em> (XOR) specific lights.
+            </p>
+            <p style="margin-bottom: 0.75rem;">
+              We build a system of linear equations: <code>A × x = b</code> where:
+            </p>
+            <ul style="margin-left: 1.5rem; margin-bottom: 0.75rem;">
+              <li><code>A[i][j] = 1</code> if button j affects light i (XOR toggle)</li>
+              <li><code>b[i]</code> = target state for light i (1 if target is ON, 0 if OFF)</li>
+              <li><code>x[j]</code> = number of presses for button j (mod 2, so 0 or 1)</li>
+            </ul>
+            <p style="margin-bottom: 0.75rem;">
+              Using Gaussian elimination over GF(2), we identify <strong>pivot variables</strong> (uniquely determined) 
+              and <strong>free variables</strong> (can be 0 or 1). We try all combinations of free variables and find 
+              the solution that minimizes total button presses.
+            </p>
+
+            <h4 style="color: #3af4b4; margin-top: 1.5rem; margin-bottom: 0.5rem;">Part 2: Joltage Counters (Addition)</h4>
+            <p style="margin-bottom: 0.75rem;">
+              The joltage counters problem is an <strong>integer linear programming</strong> (ILP) problem where 
+              each button press <em>increments</em> specific counters by 1.
+            </p>
+            <p style="margin-bottom: 0.75rem;">
+              We solve: <code>A × x = b</code> with <code>x[j] ≥ 0</code> (non-negative integers), minimizing <code>Σx[j]</code>:
+            </p>
+            <ul style="margin-left: 1.5rem; margin-bottom: 0.75rem;">
+              <li><code>A[i][j] = 1</code> if button j increments counter i</li>
+              <li><code>b[i]</code> = target value for counter i</li>
+              <li><code>x[j]</code> = number of times to press button j</li>
+            </ul>
+            <p style="margin-bottom: 0.75rem;">
+              <strong>Key insight:</strong> For each button j, we compute an upper bound 
+              <code>bounds[j] = min(b[i])</code> for all counters i that button j affects. 
+              Since pressing a button more than the smallest target it affects would inevitably overshoot, 
+              this bound is mathematically sound.
+            </p>
+            <p style="margin-bottom: 0.75rem;">
+              Using Gaussian elimination over ℝ (real numbers), we identify pivot and free variables, 
+              then perform <strong>depth-first search</strong> over all integer assignments to free variables 
+              within their bounds. For each assignment, we back-substitute to solve for pivot variables and 
+              check if they're non-negative integers within bounds. The solution with minimum total presses wins.
+            </p>
+
+            <div style="margin-top: 1.5rem; padding: 0.75rem; background: #1a1a1a; border-left: 3px solid #f4b43a;">
+              <p style="margin: 0; color: #aaa;">
+                <strong style="color: #f4b43a;">Credit:</strong> The Part 2 solution algorithm is adapted from 
+                <a href="https://github.com/Cinnamonsroll/AdventOfCode2025/blob/main/day10/part2.ts" 
+                   target="_blank" 
+                   style="color: #3af4b4; text-decoration: underline;">
+                  Cinnamonsroll's TypeScript solution
+                </a>, 
+                which elegantly demonstrates the "Gaussian elimination + bounded DFS" approach for solving 
+                restricted integer linear systems.
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   },
@@ -1088,6 +1581,7 @@ export default {
     const speedLabel = document.getElementById('day10-speed-label');
     
     let speedMultiplier = 1;
+    let globalMode = 'lights'; // Global mode for all machines
     
     speedSlider.addEventListener('input', (e) => {
       speedMultiplier = parseFloat(e.target.value);
@@ -1121,6 +1615,13 @@ export default {
         const result = solveGF2(machine.target, machine.buttons);
         machine.minPresses = result.minPresses;
         machine.optimalCombo = result.optimalCombo || [];
+        
+        // Also solve Part 2 if joltage requirements exist
+        if (machine.joltageRequirements) {
+          const joltageResult = solveJoltage(machine.joltageRequirements, machine.buttons);
+          machine.minPressesJoltage = joltageResult.minPresses;
+          machine.optimalComboJoltage = joltageResult.optimalCombo || [];
+        }
       });
       
       let currentMachineIndex = 0;
@@ -1132,17 +1633,52 @@ export default {
             <button class="nav-btn" id="prev-machine">&larr; Previous</button>
             <button class="nav-btn auto-play" id="auto-play">▶ Auto Play All</button>
             <button class="nav-btn" id="next-machine">Next &rarr;</button>
+            <div class="mode-switch" style="margin-left: auto;">
+              <span class="mode-switch-label">Mode:</span>
+              <div class="mode-toggle" id="global-mode-toggle" title="Switch between Lights and Joltage mode"></div>
+              <span class="mode-switch-text" id="mode-switch-text">${globalMode === 'lights' ? 'Lights' : 'Joltage'}</span>
+            </div>
           </div>
         ` + createMachineView(machines[currentMachineIndex], currentMachineIndex, machines.length);
         
-        initMachine(resultsEl, machines[currentMachineIndex], currentMachineIndex, speedMultiplier);
+        initMachine(resultsEl, machines[currentMachineIndex], currentMachineIndex, speedMultiplier, globalMode);
+        
+        // Update global mode toggle appearance
+        const modeToggle = document.getElementById('global-mode-toggle');
+        const modeSwitchText = document.getElementById('mode-switch-text');
+        if (globalMode === 'joltage') {
+          modeToggle.classList.add('joltage');
+          modeSwitchText.classList.add('joltage');
+        }
         
         const prevBtn = document.getElementById('prev-machine');
         const nextBtn = document.getElementById('next-machine');
         const autoPlayBtn = document.getElementById('auto-play');
+        const globalModeToggle = document.getElementById('global-mode-toggle');
+        const globalModeSwitchText = document.getElementById('mode-switch-text');
         
         prevBtn.disabled = currentMachineIndex === 0;
         nextBtn.disabled = currentMachineIndex === machines.length - 1;
+        
+        // Global mode toggle handler
+        globalModeToggle.addEventListener('click', () => {
+          const currentMachine = machines[currentMachineIndex];
+          if (globalMode === 'lights' && !currentMachine.joltageRequirements) {
+            alert('No joltage requirements available for this machine');
+            return;
+          }
+          
+          globalMode = globalMode === 'lights' ? 'joltage' : 'lights';
+          globalModeToggle.classList.toggle('joltage');
+          globalModeSwitchText.classList.toggle('joltage');
+          globalModeSwitchText.textContent = globalMode === 'lights' ? 'Lights' : 'Joltage';
+          
+          // Switch current machine's mode
+          const shell = resultsEl.querySelector('.machine-shell');
+          if (shell && shell.switchToMode) {
+            shell.switchToMode(globalMode);
+          }
+        });
         
         prevBtn.addEventListener('click', () => {
           if (currentMachineIndex > 0) {
@@ -1232,38 +1768,68 @@ export default {
       }
       
       let totalPresses = 0;
+      let totalJoltagePresses = 0;
       const results = machines.map((machine, idx) => {
         const result = solveGF2(machine.target, machine.buttons);
         if (result.minPresses !== null) {
           totalPresses += result.minPresses;
         }
-        return { idx: idx + 1, machine, result };
+        
+        let joltageResult = null;
+        if (machine.joltageRequirements) {
+          joltageResult = solveJoltage(machine.joltageRequirements, machine.buttons);
+          if (joltageResult.minPresses !== null) {
+            totalJoltagePresses += joltageResult.minPresses;
+          }
+        }
+        
+        return { idx: idx + 1, machine, result, joltageResult };
       });
       
       let html = '<div style="background: #1a1a1a; padding: 1rem; border-radius: 8px; border: 1px solid #333;">';
       html += '<h3 style="color: #f4b43a; margin-top: 0;">Solution Results</h3>';
       
+      html += '<h4 style="color: #f4b43a; margin-top: 1rem;">Part 1: Indicator Lights (XOR)</h4>';
       results.forEach(({ idx, machine, result }) => {
         html += `<div style="margin-bottom: 0.5rem; color: #ccc;">`;
         html += `Machine ${idx}: ${machine.patternString} → `;
         if (result.minPresses !== null) {
           html += `<span style="color: #6fd37c; font-weight: 600;">${result.minPresses} presses</span>`;
-          if (result.optimalCombo && result.optimalCombo.length > 0) {
-            html += ` (buttons: ${result.optimalCombo.map(i => i + 1).join(', ')})`;
-          }
         } else {
           html += `<span style="color: #ff6666;">No solution</span>`;
         }
         html += '</div>';
       });
       
-      html += '<hr style="border: none; border-top: 1px solid #333; margin: 1rem 0;" />';
-      html += `<div style="font-size: 1.2rem; color: #00cc00; font-weight: 600;">`;
-      html += `Total minimum button presses: ${totalPresses}`;
-      html += '</div>';
+      html += '<div style="margin-top: 1rem; font-size: 1.1rem; color: #00cc00; font-weight: 600;">';
+      html += `Part 1 Total: ${totalPresses} presses`;
       html += '</div>';
       
+      // Part 2 results
+      const hasJoltage = results.some(r => r.joltageResult !== null);
+      if (hasJoltage) {
+        html += '<h4 style="color: #3ab4f4; margin-top: 1.5rem;">Part 2: Joltage Counters (Addition)</h4>';
+        results.forEach(({ idx, machine, joltageResult }) => {
+          if (joltageResult) {
+            html += `<div style="margin-bottom: 0.5rem; color: #ccc;">`;
+            html += `Machine ${idx}: {${machine.joltageRequirements.join(',')}} → `;
+            if (joltageResult.minPresses !== null) {
+              html += `<span style="color: #3af4b4; font-weight: 600;">${joltageResult.minPresses} presses</span>`;
+            } else {
+              html += `<span style="color: #ff6666;">No solution</span>`;
+            }
+            html += '</div>';
+          }
+        });
+        
+        html += '<div style="margin-top: 1rem; font-size: 1.1rem; color: #3af4b4; font-weight: 600;">';
+        html += `Part 2 Total: ${totalJoltagePresses} presses`;
+        html += '</div>';
+      }
+      
+      html += '</div>';
       resultsEl.innerHTML = html;
     });
   }
 };
+
