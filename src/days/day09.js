@@ -45,7 +45,8 @@ export default {
     const resultsEl = document.getElementById('day09-results');
     const vizWrapper = document.getElementById('day09-viz-wrapper');
 
-    const MAX_GRID_CELLS = 1_000_000; // safety cap for phones
+    const MAX_GRID_CELLS = 1_000_000; // safety cap for visualization
+    const MAX_COMPUTE_CELLS = 10_000_000; // safety cap for computation (10M cells max)
 
     function parseTiles(text) {
       return text
@@ -86,7 +87,7 @@ export default {
     }
 
     // Build red+green region safely
-    function safeBuildRegion(tiles) {
+    function safeBuildRegion(tiles, forceCalculate = false) {
       if (!tiles.length) {
         return { ok: false, reason: 'No tiles.' };
       }
@@ -107,9 +108,24 @@ export default {
       }
 
       const cells = width * height;
-      if (cells > MAX_GRID_CELLS) {
+      const tooLargeForViz = cells > MAX_GRID_CELLS;
+      const tooLargeForCompute = cells > MAX_COMPUTE_CELLS;
+      
+      if (tooLargeForCompute) {
         return {
           ok: false,
+          tooLarge: true,
+          tooLargeForCompute: true,
+          cells,
+          reason: `Grid too large to compute safely in-browser (${cells} cells).`
+        };
+      }
+      
+      if (tooLargeForViz && !forceCalculate) {
+        return {
+          ok: false,
+          tooLarge: true,
+          cells,
           reason: `Grid too large to visualize safely in-browser (${cells} cells).`
         };
       }
@@ -240,6 +256,8 @@ export default {
 
       return {
         ok: true,
+        tooLargeForViz,
+        cells,
         region: {
           minX,
           minY,
@@ -252,14 +270,98 @@ export default {
       };
     }
 
-    function solvePart2(tiles) {
+    // Fast Part 2 solver using edge intersection (works for any size)
+    function solvePart2Fast(tiles) {
+      if (tiles.length < 2) {
+        return { max: 0, a: null, b: null };
+      }
+
+      // Build edges from consecutive tiles
+      const edges = [];
+      for (let i = 0; i < tiles.length - 1; i++) {
+        edges.push({
+          x1: tiles[i].x,
+          y1: tiles[i].y,
+          x2: tiles[i + 1].x,
+          y2: tiles[i + 1].y
+        });
+      }
+      // Close the loop
+      edges.push({
+        x1: tiles[tiles.length - 1].x,
+        y1: tiles[tiles.length - 1].y,
+        x2: tiles[0].x,
+        y2: tiles[0].y
+      });
+
+      function rectIntersectsEdges(minX, minY, maxX, maxY) {
+        for (const e of edges) {
+          const eMinX = Math.min(e.x1, e.x2);
+          const eMaxX = Math.max(e.x1, e.x2);
+          const eMinY = Math.min(e.y1, e.y2);
+          const eMaxY = Math.max(e.y1, e.y2);
+          
+          // Check if rectangles overlap
+          if (minX < eMaxX && maxX > eMinX && minY < eMaxY && maxY > eMinY) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      let max = 0;
+      let bestA = null;
+      let bestB = null;
+
+      for (let i = 0; i < tiles.length; i++) {
+        for (let j = i + 1; j < tiles.length; j++) {
+          const a = tiles[i];
+          const b = tiles[j];
+          
+          const minX = Math.min(a.x, b.x);
+          const maxX = Math.max(a.x, b.x);
+          const minY = Math.min(a.y, b.y);
+          const maxY = Math.max(a.y, b.y);
+
+          const area = (maxX - minX + 1) * (maxY - minY + 1);
+          
+          // Early exit if this can't beat current max
+          if (area <= max) continue;
+
+          // Check if rectangle crosses the green border
+          if (!rectIntersectsEdges(minX, minY, maxX, maxY)) {
+            max = area;
+            bestA = a;
+            bestB = b;
+          }
+        }
+      }
+
+      return { max, a: bestA, b: bestB };
+    }
+
+    function solvePart2(tiles, forceCalculate = false) {
       if (tiles.length < 2) {
         return { max: 0, a: null, b: null, rects: [], region: null, error: 'Need at least two tiles.' };
       }
 
-      const built = safeBuildRegion(tiles);
+      const built = safeBuildRegion(tiles, forceCalculate);
       if (!built.ok) {
-        return { max: 0, a: null, b: null, rects: [], region: null, error: built.reason };
+        // Use fast solver for large grids
+        if (built.tooLargeForCompute) {
+          const fastResult = solvePart2Fast(tiles);
+          return { 
+            ...fastResult, 
+            rects: [], 
+            region: null, 
+            error: null, 
+            tooLargeForViz: true, 
+            tooLargeForCompute: true,
+            cells: built.cells,
+            usedFastSolver: true
+          };
+        }
+        return { max: 0, a: null, b: null, rects: [], region: null, error: built.reason, tooLarge: built.tooLarge, tooLargeForCompute: built.tooLargeForCompute, cells: built.cells };
       }
 
       const region = built.region;
@@ -295,7 +397,7 @@ export default {
 
       validRects.sort((r1, r2) => r2.area - r1.area);
 
-      return { max, a: bestA, b: bestB, rects: validRects, region, error: null };
+      return { max, a: bestA, b: bestB, rects: validRects, region, error: null, tooLargeForViz: built.tooLargeForViz, cells: built.cells };
     }
 
     function drawVisualization(region, tiles, rects, rectIndex) {
@@ -407,10 +509,15 @@ export default {
 
       try {
         const tiles = parseTiles(input);
-        const p2 = solvePart2(tiles);
+        const p2 = solvePart2(tiles, false);
 
         if (p2.error) {
           vizWrapper.innerHTML = `<p style="color:#ff6666;">Cannot visualize Part 2: ${p2.error}</p>`;
+          return;
+        }
+
+        if (p2.tooLargeForViz) {
+          vizWrapper.innerHTML = `<p style="color:#ff6666;">Grid too large to visualize safely in-browser (${p2.cells} cells).</p>`;
           return;
         }
 
@@ -441,7 +548,7 @@ export default {
         }
 
         const p1 = solvePart1(tiles);
-        const p2 = solvePart2(tiles);
+        const p2 = solvePart2(tiles, true); // Force calculation even for large grids
 
         let html = '';
 
@@ -459,10 +566,24 @@ export default {
           `;
         }
 
-        if (p2.error) {
+        if (p2.usedFastSolver) {
+          html += `
+            <p style="color:#cccccc;">
+              <strong>Part 2:</strong> Largest rectangle using only red/green tiles area:
+              <span style="color:#00ff00;">${p2.max}</span><br/>
+              Opposite corners at:
+              (<span style="color:#00ccff;">${p2.a.x}</span>, <span style="color:#00ccff;">${p2.a.y}</span>) and
+              (<span style="color:#00ccff;">${p2.b.x}</span>, <span style="color:#00ccff;">${p2.b.y}</span>)
+            </p>
+          `;
+          html += `<p style="color:#999999;">Grid too large to visualize (${p2.cells.toLocaleString()} cells). Used fast edge-intersection solver.</p>`;
+        } else if (p2.error && !p2.tooLarge) {
           html += `<p style="color:#ff6666;"><strong>Part 2:</strong> ${p2.error}</p>`;
         } else if (p2.max === 0 || !p2.a || !p2.b) {
           html += '<p style="color:#ff6666;"><strong>Part 2:</strong> No rectangle fits entirely within red+green tiles.</p>';
+          if (p2.tooLargeForViz) {
+            html += `<p style="color:#999999;">Grid too large to visualize safely in-browser (${p2.cells} cells).</p>`;
+          }
         } else {
           html += `
             <p style="color:#cccccc;">
@@ -473,6 +594,9 @@ export default {
               (<span style="color:#00ccff;">${p2.b.x}</span>, <span style="color:#00ccff;">${p2.b.y}</span>)
             </p>
           `;
+          if (p2.tooLargeForViz) {
+            html += `<p style="color:#999999;">Grid too large to visualize safely in-browser (${p2.cells} cells).</p>`;
+          }
         }
 
         resultsEl.innerHTML = html;
