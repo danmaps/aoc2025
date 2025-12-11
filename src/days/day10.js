@@ -564,6 +564,49 @@ function createMachineView(machine, machineIndex, totalMachines) {
         0%, 100% { opacity: 1; }
         50% { opacity: 0.6; }
       }
+      .tempo-control {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .tempo-knob {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 30% 30%, #3a3a3a, #1a1a1a);
+        border: 2px solid #383838;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.5), inset 0 1px 2px rgba(255,255,255,0.1);
+        position: relative;
+        cursor: pointer;
+        user-select: none;
+        transition: transform 0.1s ease;
+      }
+      .tempo-knob:hover {
+        border-color: #f4b43a;
+      }
+      .tempo-knob::after {
+        content: '';
+        position: absolute;
+        top: 4px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 3px;
+        height: 12px;
+        background: #f4b43a;
+        border-radius: 2px;
+      }
+      .tempo-label {
+        font-size: 0.7rem;
+        color: #aaa;
+        text-transform: uppercase;
+      }
+      .tempo-value {
+        font-size: 0.75rem;
+        color: #f4b43a;
+        font-weight: 600;
+        min-width: 20px;
+        text-align: center;
+      }
     </style>
     
     <div class="machine-shell" data-machine="${machineIndex}">
@@ -589,7 +632,14 @@ function createMachineView(machine, machineIndex, totalMachines) {
           </div>
           <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
             <span class="status-chip badge-warn">Not solved</span>
-            <button class="btn-ghost loop-btn" style="display: none;">🔄 Loop</button>
+            <div style="display: flex; gap: 12px; align-items: center;">
+              <div class="tempo-control" style="display: none;">
+                <span class="tempo-label">Tempo</span>
+                <div class="tempo-knob" title="Drag up/down to adjust tempo"></div>
+                <span class="tempo-value">3</span>
+              </div>
+              <button class="btn-ghost loop-btn" style="display: none;">🔄 Loop</button>
+            </div>
           </div>
         </div>
       </section>
@@ -620,12 +670,16 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
   const replayBtn = shell.querySelector('.replay-btn');
   const playMachineBtn = shell.querySelector('.play-machine-btn');
   const loopBtn = shell.querySelector('.loop-btn');
+  const tempoControl = shell.querySelector('.tempo-control');
+  const tempoKnob = shell.querySelector('.tempo-knob');
+  const tempoValue = shell.querySelector('.tempo-value');
   
   let currentState = Array(machine.target.length).fill(0);
   let pressCount = 0;
   const buttonPressCounts = Array(machine.buttons.length).fill(0);
   let isLooping = false;
   let loopInterval = null;
+  let tempo = 3; // 1-10 scale, 3 is default
   
   // Determine sequencer dimensions (try to make it roughly 4 tracks × N steps)
   const numSteps = machine.target.length;
@@ -769,7 +823,9 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
         }
       });
       
-      await new Promise(resolve => setTimeout(resolve, 250 / speedMultiplier));
+      // Tempo affects loop speed: tempo 1 = slowest (500ms), tempo 10 = fastest (50ms)
+      const tempoSpeed = 550 - (tempo * 50); // 500ms at tempo 1, 50ms at tempo 10
+      await new Promise(resolve => setTimeout(resolve, tempoSpeed / speedMultiplier));
       
       if (!isLooping) {
         leds.forEach(led => led.classList.remove('playing'));
@@ -870,6 +926,7 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
     isLooping = false;
     loopBtn.textContent = '🔄 Loop';
     loopBtn.style.display = 'none';
+    tempoControl.style.display = 'none';
     updateSequencer();
     updateStatus();
   }
@@ -888,6 +945,7 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
         ? 'Nice! You matched or beat the optimal press count.'
         : `Solved, but used ${pressCount - machine.minPresses} extra presses.`;
       loopBtn.style.display = 'inline-block';
+      tempoControl.style.display = 'flex';
       playSolvedSound();
     } else {
       statusChipEl.textContent = 'Not solved';
@@ -925,6 +983,36 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1) {
   
   replayBtn.addEventListener('click', replayOptimal);
   playMachineBtn.addEventListener('click', replayOptimal);
+  
+  // Tempo knob drag control
+  let isDragging = false;
+  let startY = 0;
+  let startTempo = 3;
+  
+  tempoKnob.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    startY = e.clientY;
+    startTempo = tempo;
+    e.preventDefault();
+  });
+  
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const deltaY = startY - e.clientY; // Inverted: drag up increases
+    const sensitivity = 0.05;
+    let newTempo = startTempo + deltaY * sensitivity;
+    newTempo = Math.max(1, Math.min(10, newTempo));
+    tempo = Math.round(newTempo);
+    
+    // Update knob rotation (270 degrees total range)
+    const rotation = -135 + ((tempo - 1) / 9) * 270;
+    tempoKnob.style.transform = `rotate(${rotation}deg)`;
+    tempoValue.textContent = tempo;
+  });
+  
+  document.addEventListener('mouseup', () => {
+    isDragging = false;
+  });
   
   loopBtn.addEventListener('click', () => {
     isLooping = !isLooping;
