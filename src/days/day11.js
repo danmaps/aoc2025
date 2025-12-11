@@ -88,11 +88,14 @@ function buildGraphData(graph, paths, mustVisit = []) {
   const links = [];
   const pathSet = new Set();
   
-  paths.forEach((path, idx) => {
-    for (let i = 0; i < path.length - 1; i++) {
-      pathSet.add(`${path[i]}->${path[i+1]}`);
-    }
-  });
+  // Only process paths if the array is reasonable size (< 10000 paths)
+  if (paths && paths.length > 0 && paths.length < 10000) {
+    paths.forEach((path, idx) => {
+      for (let i = 0; i < path.length - 1; i++) {
+        pathSet.add(`${path[i]}->${path[i+1]}`);
+      }
+    });
+  }
   
   for (const [device, outputs] of graph.entries()) {
     if (!nodes.has(device)) {
@@ -119,7 +122,7 @@ function buildGraphData(graph, paths, mustVisit = []) {
       }
       
       const linkKey = `${device}->${output}`;
-      const isInPath = pathSet.has(linkKey);
+      const isInPath = pathSet.size > 0 ? pathSet.has(linkKey) : true; // Highlight all if we can't enumerate
       
       links.push({
         source: device,
@@ -497,33 +500,43 @@ hhh: out`;
         const allPathsCount = countPathsWithRequired(graph, 'svr', 'out', []);
         const requiredPathsCount = countPathsWithRequired(graph, 'svr', 'out', ['dac', 'fft']);
         
-        // Still get actual paths for visualization
-        const paths = findAllPaths(graph, 'svr', 'out', ['dac', 'fft']);
+        // For large path counts, skip enumeration and just show graph structure
+        const isLarge = requiredPathsCount > 100000;
+        let paths = [];
+        let pathsMessage = '';
+        
+        if (!isLarge) {
+          paths = findAllPaths(graph, 'svr', 'out', ['dac', 'fft']);
+          pathsMessage = `<details style="margin-top: 1rem;">
+            <summary style="color: #00cc00; cursor: pointer;">Show sample paths (first ${Math.min(paths.length, 100)})</summary>
+            <div style="margin-top: 0.5rem; max-height: 300px; overflow-y: auto;">
+              ${paths.slice(0, 100).map((path, i) => `
+                <div style="color: #aaa; font-family: monospace; font-size: 0.9rem; margin: 0.25rem 0;">
+                  ${i+1}. ${path.join(' → ')}
+                </div>
+              `).join('')}
+              ${paths.length > 100 ? `<div style="color: #888; margin-top: 0.5rem;">...and ${paths.length - 100} more</div>` : ''}
+            </div>
+          </details>`;
+        } else {
+          pathsMessage = `<p style="color: #ffaa00; margin-top: 1rem;">⚠ Too many paths to enumerate (${requiredPathsCount.toLocaleString()}). Showing graph structure only.</p>`;
+        }
+        
         const graphData = buildGraphData(graph, paths, ['dac', 'fft']);
         
         resultsEl.innerHTML = `
           <div style="padding: 1rem; background: #111; border: 1px solid #333; margin-bottom: 1rem;">
             <p style="color: #00ff00; font-size: 1.2rem; margin: 0.5rem 0;">
-              <strong>Part 2 Answer: ${requiredPathsCount} paths</strong>
+              <strong>Part 2 Answer: ${requiredPathsCount.toLocaleString()} paths</strong>
             </p>
             <p style="color: #cccccc; margin: 0.5rem 0;">
-              Total paths from svr to out: ${allPathsCount} | 
-              Paths visiting both dac and fft: <strong>${requiredPathsCount}</strong>
+              Total paths from svr to out: ${allPathsCount.toLocaleString()} | 
+              Paths visiting both dac and fft: <strong>${requiredPathsCount.toLocaleString()}</strong>
             </p>
             <p style="color: #cccccc; margin: 0.5rem 0;">
               Nodes: ${graphData.nodes.length} | Links: ${graphData.links.length}
             </p>
-            <details style="margin-top: 1rem;">
-              <summary style="color: #00cc00; cursor: pointer;">Show sample paths (first ${Math.min(paths.length, 100)})</summary>
-              <div style="margin-top: 0.5rem; max-height: 300px; overflow-y: auto;">
-                ${paths.slice(0, 100).map((path, i) => `
-                  <div style="color: #aaa; font-family: monospace; font-size: 0.9rem; margin: 0.25rem 0;">
-                    ${i+1}. ${path.join(' → ')}
-                  </div>
-                `).join('')}
-                ${paths.length > 100 ? `<div style="color: #888; margin-top: 0.5rem;">...and ${paths.length - 100} more</div>` : ''}
-              </div>
-            </details>
+            ${pathsMessage}
             <div style="margin-top: 1rem; color: #888; font-size: 0.9rem;">
               <strong>Legend:</strong>
               <span style="color: #00ff00;">● START (svr)</span> | 
