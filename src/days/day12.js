@@ -98,6 +98,12 @@ function solvePacking(region, shapes, onStep = null) {
   // Build piece list
   const pieces = [];
   const labels = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const colors = [
+    '#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7',
+    '#fd79a8', '#fdcb6e', '#00b894', '#e17055', '#74b9ff',
+    '#a29bfe', '#ff7675', '#fab1a0', '#ffeaa7', '#dfe6e9',
+    '#55efc4', '#81ecec', '#e84393', '#00cec9', '#0984e3'
+  ];
   let labelIdx = 0;
   
   for (let shapeIdx = 0; shapeIdx < region.required.length; shapeIdx++) {
@@ -107,14 +113,17 @@ function solvePacking(region, shapes, onStep = null) {
     
     for (let i = 0; i < count; i++) {
       pieces.push({
-        label: labels[labelIdx++ % labels.length],
+        label: labels[labelIdx % labels.length],
+        color: colors[labelIdx % colors.length],
         variants
       });
+      labelIdx++;
     }
   }
   
   let steps = 0;
-  const maxSteps = 10000;
+  const maxSteps = 50000;
+  const frames = [];
   
   function canPlace(variant, x, y) {
     for (const [dx, dy] of variant) {
@@ -137,6 +146,25 @@ function solvePacking(region, shapes, onStep = null) {
     }
   }
   
+  function boardToHTML() {
+    let html = '<div style="display:inline-block;background:#000;border:2px solid #555;padding:2px;line-height:0;">';
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const cell = board[y][x];
+        if (cell === '.') {
+          html += '<span style="display:inline-block;width:20px;height:20px;background:#1a1a1a;"></span>';
+        } else {
+          const piece = pieces.find(p => p.label === cell);
+          const color = piece ? piece.color : '#666';
+          html += `<span style="display:inline-block;width:20px;height:20px;background:${color};"></span>`;
+        }
+      }
+      if (y < H - 1) html += '<br>';
+    }
+    html += '</div>';
+    return html;
+  }
+  
   function solve(pieceIdx) {
     if (steps++ > maxSteps) return false;
     
@@ -150,8 +178,13 @@ function solvePacking(region, shapes, onStep = null) {
           if (canPlace(variant, x, y)) {
             place(variant, x, y, piece.label);
             
-            if (onStep) {
-              onStep(board.map(row => row.join('')).join('\n'), pieceIdx + 1, pieces.length);
+            if (onStep && frames.length < 500) { // Limit frames
+              frames.push({
+                board: boardToHTML(),
+                pieceNum: pieceIdx + 1,
+                total: pieces.length,
+                step: steps
+              });
             }
             
             if (solve(pieceIdx + 1)) return true;
@@ -166,7 +199,12 @@ function solvePacking(region, shapes, onStep = null) {
   }
   
   const result = solve(0);
-  return { success: result, steps, finalBoard: board.map(row => row.join('')).join('\n') };
+  return { 
+    success: result, 
+    steps, 
+    frames,
+    finalBoard: boardToHTML()
+  };
 }
 
 function canFitPresents(region, shapes) {
@@ -263,8 +301,8 @@ export default {
             style="width: 100%; min-height: 200px; background: #0a0a0a; color: #00cc00; border: 1px solid #333; padding: 0.75rem; font-family: 'Source Code Pro', monospace; font-size: 12px; resize: vertical;"
           ></textarea>
           <div style="margin-top: 0.5rem;">
-            <button id="day12-visualize" class="btn" style="margin-right: 0.5rem;">[Visualize Regions]</button>
             <button id="day12-solve" class="btn" style="margin-right: 0.5rem;">[Solve Packing]</button>
+            <button id="day12-visualize" class="btn" style="margin-right: 0.5rem;">[Guess Based on Area]</button>
             <button id="day12-reveal" class="btn">[Reveal Solution]</button>
           </div>
         </div>
@@ -307,36 +345,113 @@ export default {
       resultsEl.innerHTML = '<p style="color: #00cc00;">Starting backtracking solver...</p>';
       
       setTimeout(() => {
+        const results = regions.map(region => solvePacking(region, shapes, true));
+        
         let html = '<div style="margin-top: 1rem;">';
         html += '<p style="color: #00cc00; font-size: 16px; margin-bottom: 1rem;">🎯 Backtracking Solver Results:</p>';
         
+        // Speed slider
+        html += `
+          <div style="margin-bottom: 1.5rem; padding: 1rem; background: #0a0a0a; border: 1px solid #333;">
+            <label style="color: #00cc00; display: block; margin-bottom: 0.5rem;">Animation Speed:</label>
+            <input type="range" id="speed-slider" min="1" max="100" value="50" style="width: 300px; margin-right: 1rem;">
+            <span id="speed-label" style="color: #ffff00;">50ms/frame</span>
+            <button id="play-all-btn" class="btn" style="margin-left: 1rem;">[Play All Animations]</button>
+          </div>
+        `;
+        
         regions.forEach((region, idx) => {
+          const result = results[idx];
           html += `<div style="margin-bottom: 2rem; padding: 1rem; background: #0a0a0a; border: 1px solid #333;">`;
           html += `<p style="color: #ffff00; font-weight: bold; margin-bottom: 0.5rem;">Region ${idx + 1}: ${region.width}x${region.height}</p>`;
           
-          const frames = [];
-          const result = solvePacking(region, shapes, (board, pieceNum, total) => {
-            if (frames.length < 50) { // Limit stored frames
-              frames.push({ board, pieceNum, total });
-            }
-          });
-          
           if (result.success) {
-            html += `<p style="color: #00ff00; margin-bottom: 0.5rem;">✓ Solution found! (${result.steps} steps)</p>`;
-            html += `<pre style="background: #000; color: #00ff00; padding: 1rem; font-size: 14px; line-height: 1.3; font-family: monospace;">${result.finalBoard}</pre>`;
+            html += `<p style="color: #00ff00; margin-bottom: 0.5rem;">✓ Solution found! (${result.steps} steps, ${result.frames.length} frames)</p>`;
           } else {
-            html += `<p style="color: #ff6666; margin-bottom: 0.5rem;">✗ No solution found (tried ${result.steps} steps)</p>`;
+            html += `<p style="color: #ff6666; margin-bottom: 0.5rem;">✗ No solution exists</p>`;
+            html += `<p style="color: #999; font-size: 13px; margin-bottom: 0.5rem;">Exhaustively searched ${result.steps} placements. No matter how hard you try, there is no way to fit all of the presents into this region.</p>`;
           }
+          
+          if (result.frames.length > 0) {
+            html += `<button class="btn play-btn" data-region="${idx}" style="margin-bottom: 0.5rem;">[Play Animation - ${result.frames.length} frames]</button>`;
+          }
+          
+          html += `<div id="region-${idx}-display">`;
+          html += `<div style="background: #000; padding: 1rem; display: inline-block;">${result.finalBoard}</div>`;
+          html += `</div>`;
           
           html += `</div>`;
         });
         
         html += '</div>';
         resultsEl.innerHTML = html;
+        
+        // Set up animation controls
+        const speedSlider = document.getElementById('speed-slider');
+        const speedLabel = document.getElementById('speed-label');
+        const playAllBtn = document.getElementById('play-all-btn');
+        
+        let animationSpeed = 50;
+        
+        speedSlider.addEventListener('input', (e) => {
+          animationSpeed = parseInt(e.target.value);
+          speedLabel.textContent = `${animationSpeed}ms/frame`;
+        });
+        
+        function playAnimation(regionIdx) {
+          const result = results[regionIdx];
+          if (result.frames.length === 0) return;
+          
+          const displayEl = document.getElementById(`region-${regionIdx}-display`);
+          let frameIdx = 0;
+          
+          const animate = () => {
+            if (frameIdx < result.frames.length) {
+              const frame = result.frames[frameIdx];
+              displayEl.innerHTML = `
+                <p style="color: #999; font-size: 12px; margin-bottom: 0.3rem;">Placing piece ${frame.pieceNum}/${frame.total} (step ${frame.step})</p>
+                <div style="background: #000; padding: 1rem; display: inline-block;">${frame.board}</div>
+              `;
+              frameIdx++;
+              setTimeout(animate, animationSpeed);
+            } else {
+              if (result.success) {
+                displayEl.innerHTML = `
+                  <p style="color: #00ff00; font-weight: bold; margin-bottom: 0.3rem;">✓ Complete!</p>
+                  <div style="background: #000; padding: 1rem; display: inline-block;">${result.finalBoard}</div>
+                `;
+              } else {
+                displayEl.innerHTML = `
+                  <p style="color: #ff6666; font-weight: bold; margin-bottom: 0.3rem;">✗ Failed - No solution exists</p>
+                  <div style="background: #000; padding: 1rem; display: inline-block;">${result.finalBoard}</div>
+                `;
+              }
+            }
+          };
+          
+          animate();
+        }
+        
+        document.querySelectorAll('.play-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const regionIdx = parseInt(btn.getAttribute('data-region'));
+            playAnimation(regionIdx);
+          });
+        });
+        
+        playAllBtn.addEventListener('click', () => {
+          let delay = 0;
+          results.forEach((result, idx) => {
+            if (result.frames.length > 0) {
+              setTimeout(() => playAnimation(idx), delay);
+              delay += result.frames.length * animationSpeed + 1000;
+            }
+          });
+        });
+        
       }, 100);
     });
 
-    visualizeBtn.addEventListener('click', () => {
     visualizeBtn.addEventListener('click', () => {
       const input = inputEl.value.trim();
       if (!input) {
@@ -348,20 +463,21 @@ export default {
       const { shapes, regions } = parseInput(lines);
       
       let html = '<div style="margin-top: 1rem;">';
-      html += '<p style="color: #00cc00; font-size: 16px; margin-bottom: 1rem;">📦 Region Analysis:</p>';
+      html += '<p style="color: #00cc00; font-size: 16px; margin-bottom: 1rem;">📦 Area-Based Heuristic (Guess):</p>';
+      html += '<p style="color: #ffaa00; font-size: 13px; margin-bottom: 1rem;">⚠️ This is just a guess based on area! It doesn\'t account for shape constraints.</p>';
       
       regions.forEach((region, idx) => {
         const analysis = visualizeRegion(region, shapes);
         const statusColor = analysis.canFit ? '#00ff00' : '#ff6666';
         const statusText = analysis.canFit ? '✓ CAN FIT' : '✗ CANNOT FIT';
-        
         html += `
           <div style="margin-bottom: 1.5rem; padding: 1rem; background: #0a0a0a; border-left: 3px solid ${statusColor};">
-            <p style="color: ${statusColor}; font-weight: bold; margin-bottom: 0.5rem;">${statusText}</p>
+            <p style="color: ${statusColor}; font-weight: bold; margin-bottom: 0.5rem;">${statusText} (by area)</p>
             <p style="color: #cccccc; margin: 0.3rem 0;"><strong>Region ${idx + 1}:</strong> ${analysis.regionSize} (${analysis.regionArea} units)</p>
             <p style="color: #999; margin: 0.3rem 0; font-size: 13px;">Required presents:</p>
             <pre style="color: #999; margin: 0.5rem 0 0.5rem 1rem; font-size: 12px; line-height: 1.4;">${analysis.details.join('\n')}</pre>
             <p style="color: #ffff00; margin: 0.5rem 0 0 0;"><strong>Total required:</strong> ${analysis.requiredArea} units (${analysis.percentage}% of region)</p>
+            <p style="color: #ff8800; font-size: 12px; margin-top: 0.5rem; font-style: italic;">Note: Area fits, but actual packing may still fail due to shape constraints!</p>
           </div>
         `;
       });
