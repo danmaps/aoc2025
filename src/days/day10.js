@@ -508,11 +508,36 @@ function createMachineView(machine, machineIndex, totalMachines) {
         background: #1a1a1a;
         border-radius: 6px;
       }
+      .sequencer-track.track-disabled {
+        opacity: 0.5;
+      }
       .track-label {
         font-size: 0.75rem;
         color: #aaa;
         text-transform: uppercase;
         min-width: 50px;
+      }
+      .track-controls {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .track-toggle {
+        background: #142a14;
+        border: 1px solid #1f4c24;
+        color: #7dff9b;
+        font-size: 0.7rem;
+        padding: 4px 8px;
+        border-radius: 20px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .track-toggle.off {
+        background: #2b1a1a;
+        border-color: #513030;
+        color: #ff9b7d;
+        opacity: 0.75;
       }
       .track-selector {
         background: #252525;
@@ -526,6 +551,22 @@ function createMachineView(machine, machineIndex, totalMachines) {
       }
       .track-selector:hover {
         background: #2a2a2a;
+      }
+      .track-solo-btn {
+        background: #1a1a2b;
+        border: 1px solid #2f2f60;
+        color: #9fd1ff;
+        font-size: 0.7rem;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+      }
+      .track-solo-btn.active {
+        background: #2f4065;
+        color: #fff;
+        border-color: #4f7edb;
+        box-shadow: 0 0 6px rgba(79,126,219,0.4);
       }
       .step-indicator {
         position: absolute;
@@ -554,6 +595,16 @@ function createMachineView(machine, machineIndex, totalMachines) {
         margin-bottom: 8px;
         display: flex;
         justify-content: space-between;
+      }
+      .pattern-controls {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .pattern-controls .btn-ghost {
+        font-size: 0.72rem;
+        padding: 4px 8px;
       }
       .strip-row {
         display: grid;
@@ -958,6 +1009,10 @@ function createMachineView(machine, machineIndex, totalMachines) {
           <div class="sequencer-grid" style="display: grid; gap: 4px; margin-top: 8px;">
             <!-- Drum tracks will be inserted here -->
           </div>
+          <div class="pattern-controls">
+            <button class="btn-ghost pattern-clear-btn">Clear</button>
+            <button class="btn-ghost pattern-random-btn">Randomize</button>
+          </div>
           <div style="margin-top: 12px; display: flex; justify-content: space-between; align-items: center;">
             <span class="status-chip badge-warn">Not solved</span>
             <div style="display: flex; gap: 12px; align-items: center;">
@@ -1004,6 +1059,9 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
   const modeTitle = shell.querySelector('.mode-title');
   const modeSubtitle = shell.querySelector('.mode-subtitle');
   const minPressesDisplay = shell.querySelector('.min-presses-display');
+  const patternControlsEl = shell.querySelector('.pattern-controls');
+  const clearPatternBtn = shell.querySelector('.pattern-clear-btn');
+  const randomPatternBtn = shell.querySelector('.pattern-random-btn');
   
   let currentMode = initialMode; // 'lights' or 'joltage'
   let currentState = Array(machine.target.length).fill(0);
@@ -1025,8 +1083,10 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
   // Track instrument selections
   const trackTypes = ['kick', 'snare', 'hat', 'perc'].slice(0, numTracks);
   const trackSounds = {};
+  const trackControls = {};
+  let soloTrack = null;
   trackTypes.forEach((type, idx) => {
-    trackSounds[idx] = { type, soundIdx: 0, audioBuffer: null };
+    trackSounds[idx] = { type, soundIdx: 0, audioBuffer: null, enabled: true };
   });
   
   // Load initial sounds
@@ -1039,9 +1099,111 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
   }
   loadTrackSounds();
   
+  function shouldPlayTrack(trackIdx) {
+    const track = trackSounds[trackIdx];
+    if (!track || !track.enabled) return false;
+    return soloTrack === null || soloTrack === trackIdx;
+  }
+  
+  function refreshTrackControls() {
+    Object.keys(trackControls).forEach(key => {
+      const idx = parseInt(key, 10);
+      const refs = trackControls[idx];
+      const track = trackSounds[idx];
+      if (!refs || !track) return;
+      refs.row.classList.toggle('track-disabled', !track.enabled);
+      refs.toggleBtn.textContent = track.enabled ? 'ON' : 'OFF';
+      refs.toggleBtn.classList.toggle('off', !track.enabled);
+      refs.toggleBtn.setAttribute('aria-pressed', track.enabled ? 'true' : 'false');
+      refs.soloBtn.classList.toggle('active', soloTrack === idx);
+    });
+  }
+  
+  function setSoloTrack(idx) {
+    soloTrack = soloTrack === idx ? null : idx;
+    refreshTrackControls();
+  }
+  
+  function clearSequencerPattern() {
+    if (!sequencerGrid) return;
+    currentState = Array(machine.target.length).fill(0);
+    const leds = sequencerGrid.querySelectorAll('.led');
+    leds.forEach(led => {
+      led.classList.remove('on', 'flash', 'playing');
+    });
+    updateSequencer();
+    updateStatus();
+  }
+  
+  async function randomizeTrackInstruments() {
+    const trackIndices = Object.keys(trackSounds);
+    for (const key of trackIndices) {
+      const trackIdx = parseInt(key, 10);
+      const track = trackSounds[trackIdx];
+      if (!track) continue;
+      const soundList = drumSounds[track.type];
+      if (!soundList || !soundList.length) continue;
+      const randomIdx = Math.floor(Math.random() * soundList.length);
+      track.soundIdx = randomIdx;
+      const soundFile = soundList[randomIdx];
+      const refs = trackControls[trackIdx];
+      if (refs && refs.selector) {
+        refs.selector.value = String(randomIdx);
+      }
+      track.audioBuffer = await loadSound('../src/assets/' + soundFile);
+    }
+  }
+  
+  function randomizeSequencerTracks(density = 0.4) {
+    if (currentMode !== 'lights' || !sequencerGrid) return;
+    const leds = Array.from(sequencerGrid.querySelectorAll('.led'));
+    const puzzleState = currentState.slice();
+    
+    leds.forEach(led => {
+      led.classList.remove('flash');
+      const bitIndex = parseInt(led.dataset.bitIndex, 10);
+      
+      if (led.classList.contains('puzzle-light')) {
+        if (!Number.isNaN(bitIndex) && bitIndex < puzzleState.length) {
+          const active = puzzleState[bitIndex] === 1;
+          led.classList.toggle('on', active);
+        }
+        return;
+      }
+      
+      const active = Math.random() < density;
+      led.classList.toggle('on', active);
+    });
+    
+    updateStatus();
+  }
+  
+  if (clearPatternBtn) {
+    clearPatternBtn.addEventListener('click', () => {
+      if (currentMode !== 'lights') return;
+      clearSequencerPattern();
+    });
+  }
+  
+  if (randomPatternBtn) {
+    randomPatternBtn.addEventListener('click', async () => {
+      if (currentMode !== 'lights') return;
+      randomizeSequencerTracks(0.5);
+      await randomizeTrackInstruments();
+    });
+  }
+  
+  if (patternControlsEl) {
+    patternControlsEl.style.display = currentMode === 'lights' ? 'flex' : 'none';
+  }
+  
   // Mode switching
   function switchMode(newMode) {
     currentMode = newMode;
+    
+    if (patternControlsEl) {
+      patternControlsEl.style.display = newMode === 'lights' ? 'flex' : 'none';
+    }
     
     if (newMode === 'joltage') {
       modeTitle.textContent = 'Voltage Monitors';
@@ -1134,6 +1296,7 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
   
   function createSequencer() {
     sequencerGrid.innerHTML = '';
+    Object.keys(trackControls).forEach(key => delete trackControls[key]);
     
     // Show 8 columns for patterns up to 8, otherwise 16 columns
     const totalColumns = numSteps > 8 ? 16 : 8;
@@ -1141,12 +1304,30 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
     for (let trackIdx = 0; trackIdx < numTracks; trackIdx++) {
       const trackRow = document.createElement('div');
       trackRow.className = 'sequencer-track';
+      trackRow.dataset.trackIdx = trackIdx;
       
       // Track label
       const label = document.createElement('div');
       label.className = 'track-label';
       label.textContent = trackTypes[trackIdx].toUpperCase();
       trackRow.appendChild(label);
+      
+      const controlsCluster = document.createElement('div');
+      controlsCluster.className = 'track-controls';
+      
+      const powerToggle = document.createElement('button');
+      powerToggle.className = 'track-toggle';
+      powerToggle.type = 'button';
+      powerToggle.textContent = 'ON';
+      powerToggle.setAttribute('aria-pressed', 'true');
+      powerToggle.addEventListener('click', () => {
+        trackSounds[trackIdx].enabled = !trackSounds[trackIdx].enabled;
+        if (!trackSounds[trackIdx].enabled && soloTrack === trackIdx) {
+          soloTrack = null;
+        }
+        refreshTrackControls();
+      });
+      controlsCluster.appendChild(powerToggle);
       
       // Instrument selector
       const selector = document.createElement('select');
@@ -1163,7 +1344,25 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
         const soundFile = soundList[trackSounds[trackIdx].soundIdx];
         trackSounds[trackIdx].audioBuffer = await loadSound('../src/assets/' + soundFile);
       });
-      trackRow.appendChild(selector);
+      controlsCluster.appendChild(selector);
+      
+      const soloBtn = document.createElement('button');
+      soloBtn.className = 'track-solo-btn';
+      soloBtn.type = 'button';
+      soloBtn.textContent = 'Solo';
+      soloBtn.addEventListener('click', () => {
+        setSoloTrack(trackIdx);
+      });
+      controlsCluster.appendChild(soloBtn);
+      
+      trackControls[trackIdx] = {
+        row: trackRow,
+        toggleBtn: powerToggle,
+        soloBtn,
+        selector
+      };
+      
+      trackRow.appendChild(controlsCluster);
       
       // Step LEDs - always 8 columns
       const stepsContainer = document.createElement('div');
@@ -1209,6 +1408,8 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
       trackRow.appendChild(stepsContainer);
       sequencerGrid.appendChild(trackRow);
     }
+    
+    refreshTrackControls();
   }
   
   function updateSequencer(flashIndices = []) {
@@ -1224,7 +1425,7 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
         
         // Play sound for this track
         const trackIdx = parseInt(led.dataset.trackIdx);
-        if (trackSounds[trackIdx] && trackSounds[trackIdx].audioBuffer && bit === 1) {
+        if (trackSounds[trackIdx] && trackSounds[trackIdx].audioBuffer && bit === 1 && shouldPlayTrack(trackIdx)) {
           playSound(trackSounds[trackIdx].audioBuffer, 0.4);
         }
       }
@@ -1243,7 +1444,7 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
           // Play if active
           if (led.classList.contains('on')) {
             const trackIdx = parseInt(led.dataset.trackIdx);
-            if (trackSounds[trackIdx] && trackSounds[trackIdx].audioBuffer) {
+            if (trackSounds[trackIdx] && trackSounds[trackIdx].audioBuffer && shouldPlayTrack(trackIdx)) {
               playSound(trackSounds[trackIdx].audioBuffer, 0.4);
             }
           }
