@@ -421,6 +421,11 @@ const sounds = {
   transition: null
 };
 
+const TEMPO_MIN_BPM = 60;
+const TEMPO_MAX_BPM = 180;
+const TEMPO_DEFAULT_BPM = 120;
+const TEMPO_STEPS_PER_BEAT = 4; // 16th-note grid
+
 (async () => {
   sounds.buttonPress = await loadSound('../src/assets/' + drumSounds.kick[0]);
   sounds.solved = await loadSound('../src/assets/' + drumSounds.snare[0]);
@@ -1019,7 +1024,7 @@ function createMachineView(machine, machineIndex, totalMachines) {
               <div class="tempo-control" style="display: none;">
                 <span class="tempo-label">Tempo</span>
                 <div class="tempo-knob" title="Drag up/down to adjust tempo"></div>
-                <span class="tempo-value">3</span>
+                <span class="tempo-value">${TEMPO_DEFAULT_BPM} BPM</span>
               </div>
               <button class="btn-ghost loop-btn" style="display: none;">🔄 Loop</button>
             </div>
@@ -1070,7 +1075,7 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
   const buttonPressCounts = Array(machine.buttons.length).fill(0);
   let isLooping = false;
   let loopInterval = null;
-  let tempo = 3; // 1-10 scale, 3 is default
+  let tempoBpm = TEMPO_DEFAULT_BPM;
   
   // Store initial mode in dataset for external access
   shell.dataset.currentMode = currentMode;
@@ -1196,6 +1201,23 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
   if (patternControlsEl) {
     patternControlsEl.style.display = currentMode === 'lights' ? 'flex' : 'none';
   }
+  
+  function syncTempoUI() {
+    if (!tempoKnob || !tempoValue) return;
+    const rotationRange = 270;
+    const normalized = (tempoBpm - TEMPO_MIN_BPM) / (TEMPO_MAX_BPM - TEMPO_MIN_BPM);
+    const rotation = -135 + normalized * rotationRange;
+    tempoKnob.style.transform = `rotate(${rotation}deg)`;
+    tempoValue.textContent = `${tempoBpm} BPM`;
+  }
+  
+  function setTempoBpm(newBpm) {
+    const clamped = Math.max(TEMPO_MIN_BPM, Math.min(TEMPO_MAX_BPM, newBpm));
+    tempoBpm = Math.round(clamped);
+    syncTempoUI();
+  }
+  
+  syncTempoUI();
   
   // Mode switching
   function switchMode(newMode) {
@@ -1453,9 +1475,9 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
         }
       });
       
-      // Tempo affects loop speed: tempo 1 = slowest (500ms), tempo 10 = fastest (50ms)
-      const tempoSpeed = 550 - (tempo * 50); // 500ms at tempo 1, 50ms at tempo 10
-      await new Promise(resolve => setTimeout(resolve, tempoSpeed / speedMultiplier));
+      // Each grid step is a 16th note relative to the BPM
+      const stepDurationMs = (60000 / tempoBpm) / TEMPO_STEPS_PER_BEAT;
+      await new Promise(resolve => setTimeout(resolve, stepDurationMs));
       
       if (!isLooping) {
         leds.forEach(led => led.classList.remove('playing'));
@@ -1651,27 +1673,23 @@ function initMachine(container, machine, machineIndex, speedMultiplier = 1, init
   // Tempo knob drag control
   let isDragging = false;
   let startY = 0;
-  let startTempo = 3;
+  let startTempoBpm = tempoBpm;
+  const tempoDragSensitivity = 0.6;
   
-  tempoKnob.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    startY = e.clientY;
-    startTempo = tempo;
-    e.preventDefault();
-  });
+  if (tempoKnob) {
+    tempoKnob.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startY = e.clientY;
+      startTempoBpm = tempoBpm;
+      e.preventDefault();
+    });
+  }
   
   document.addEventListener('mousemove', (e) => {
     if (!isDragging) return;
-    const deltaY = startY - e.clientY; // Inverted: drag up increases
-    const sensitivity = 0.05;
-    let newTempo = startTempo + deltaY * sensitivity;
-    newTempo = Math.max(1, Math.min(10, newTempo));
-    tempo = Math.round(newTempo);
-    
-    // Update knob rotation (270 degrees total range)
-    const rotation = -135 + ((tempo - 1) / 9) * 270;
-    tempoKnob.style.transform = `rotate(${rotation}deg)`;
-    tempoValue.textContent = tempo;
+    const deltaY = startY - e.clientY; // drag up increases tempo
+    const newTempo = startTempoBpm + deltaY * tempoDragSensitivity;
+    setTempoBpm(newTempo);
   });
   
   document.addEventListener('mouseup', () => {
