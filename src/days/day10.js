@@ -293,6 +293,36 @@ function solveJoltage(joltageRequirements, buttons) {
 // Audio system for drum machine
 const audioCache = new Map();
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const audioUnlockEvents = ['pointerdown', 'touchstart', 'keydown'];
+let audioUnlockPending = false;
+
+function handleAudioUnlock() {
+  if (audioCtx.state !== 'suspended') {
+    if (typeof window !== 'undefined') {
+      audioUnlockEvents.forEach(evt => window.removeEventListener(evt, handleAudioUnlock));
+    }
+    return;
+  }
+
+  if (audioUnlockPending) return;
+  audioUnlockPending = true;
+
+  audioCtx.resume()
+    .then(() => {
+      audioUnlockPending = false;
+      if (typeof window !== 'undefined') {
+        audioUnlockEvents.forEach(evt => window.removeEventListener(evt, handleAudioUnlock));
+      }
+    })
+    .catch(error => {
+      audioUnlockPending = false;
+      console.warn('Unable to resume audio context:', error);
+    });
+}
+
+if (typeof window !== 'undefined' && audioCtx.state === 'suspended') {
+  audioUnlockEvents.forEach(evt => window.addEventListener(evt, handleAudioUnlock));
+}
 
 // Available drum sounds
 const drumSounds = {
@@ -363,15 +393,25 @@ async function loadSound(url) {
 function playSound(audioBuffer, volume = 1) {
   if (!audioBuffer) return;
   
-  const source = audioCtx.createBufferSource();
-  const gainNode = audioCtx.createGain();
+  const startPlayback = () => {
+    const source = audioCtx.createBufferSource();
+    const gainNode = audioCtx.createGain();
+    
+    source.buffer = audioBuffer;
+    source.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    gainNode.gain.value = volume;
+    
+    source.start(0);
+  };
   
-  source.buffer = audioBuffer;
-  source.connect(gainNode);
-  gainNode.connect(audioCtx.destination);
-  gainNode.gain.value = volume;
-  
-  source.start(0);
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume().then(startPlayback).catch(error => {
+      console.warn('Unable to start audio playback:', error);
+    });
+  } else {
+    startPlayback();
+  }
 }
 
 // Default sounds for UI interactions
@@ -1832,4 +1872,3 @@ export default {
     });
   }
 };
-
